@@ -1,8 +1,8 @@
- package ApiCommonData::Load::TuningConfig::TuningIndex;
+ package TuningManager::TuningManager::TuningIndex;
 
 use strict;
 use Data::Dumper;
-use ApiCommonData::Load::TuningConfig::Log;
+use TuningManager::TuningManager::Log;
 
 sub new {
     my ($class,
@@ -29,7 +29,7 @@ sub new {
     $self->{simpleTable} = $simpleTable;
 
     # check that such an index exists on this table
-    ApiCommonData::Load::TuningConfig::Log::addLog("Checking for index on $self->{table} ($self->{columnList})");
+    TuningManager::TuningManager::Log::addLog("Checking for index on $self->{table} ($self->{columnList})");
 
     my $columnNumber;
     my @aicInstances;  # occurrences of ALL_INDEX_COLUMNS in query
@@ -50,12 +50,12 @@ sub new {
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
     my $indexExists;
     while (my ($index_name, $columnCount) = $stmt->fetchrow_array()) {
       $indexExists = 1;
-      ApiCommonData::Load::TuningConfig::Log::addLog("WARNING: the database contains the index "
+      TuningManager::TuningManager::Log::addLog("WARNING: the database contains the index "
 						     . $index_name
 						     . ", which is an extension of the tuningIndex "
 						     . $self->{name}
@@ -81,21 +81,21 @@ sub create {
 
     my $startTime = time;
 
-    ApiCommonData::Load::TuningConfig::Log::setUpdateNeededFlag();
+    TuningManager::TuningManager::Log::setUpdateNeededFlag();
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("creating index " . $self->{name});
+    TuningManager::TuningManager::Log::addLog("creating index " . $self->{name});
     my $sql = $self->getCreateStatement();
     my $stmt = $dbh->prepare($sql);
 
     my  $message = $sql;
     $message =~ s/create/must create/;
-    ApiCommonData::Load::TuningConfig::Log::addLog($message);
+    TuningManager::TuningManager::Log::addLog($message);
 
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     $stmt->finish();
 
-    ApiCommonData::Load::TuningConfig::Log::addLog(time - $startTime .
+    TuningManager::TuningManager::Log::addLog(time - $startTime .
 						  " seconds to rebuild index " .
 						  $self->{name});
 

@@ -1,9 +1,9 @@
-package ApiCommonData::Load::TuningConfig::ExternalTuningTable;
+package TuningManager::TuningManager::ExternalTuningTable;
 
-# @ISA = qw( ApiCommonData::Load::TuningConfig::Table );
+# @ISA = qw( TuningManager::TuningManager::Table );
 
 use strict;
-use ApiCommonData::Load::TuningConfig::Log;
+use TuningManager::TuningManager::Log;
 
 sub new {
     my ($class,
@@ -33,13 +33,13 @@ sub new {
 SQL
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($timestamp) = $stmt->fetchrow_array();
     $stmt->finish();
 
     if (!defined $timestamp) {
       $self->{exists} = 0;
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("No TuningTable record for " . $self->getName());
+      TuningManager::TuningManager::Log::addErrorLog("No TuningTable record for " . $self->getName());
     } else {
       $self->{exists} = 1;
     };

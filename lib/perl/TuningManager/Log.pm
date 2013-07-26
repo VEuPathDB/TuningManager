@@ -1,6 +1,6 @@
-package ApiCommonData::Load::TuningConfig::Log;
+package TuningManager::TuningManager::Log;
 
-use ApiCommonData::Load::TuningConfig::TableSuffix;
+use TuningManager::TuningManager::TableSuffix;
 
 BEGIN {
 
@@ -189,7 +189,7 @@ sub getProcessInfo {
 sub logRebuild {
   my ($dbh, $name, $buildDuration, $instanceName, $dblink, $recordCount) = @_;
 
-  my $suffix = ApiCommonData::Load::TuningConfig::TableSuffix::getSuffix($dbh);
+  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh);
   my $updater = getProcessInfo();
 
   $dbh->do(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
@@ -212,7 +212,7 @@ sub mailOutOfSpaceReport {
 
   my $subject = "out of space in instance $instance, tablespace $tablespace";
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("Sending out-of-space notification to \"$dbaEmail\" with subject \"$subject\"");
+  TuningManager::TuningManager::Log::addLog("Sending out-of-space notification to \"$dbaEmail\" with subject \"$subject\"");
 
   open(MAIL, "|mail -s '$subject' $dbaEmail  -- -r $fromEmail");
 

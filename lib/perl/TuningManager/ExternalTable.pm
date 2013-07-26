@@ -1,13 +1,13 @@
-package ApiCommonData::Load::TuningConfig::ExternalTable;
+package TuningManager::TuningManager::ExternalTable;
 
 
-# @ISA = qw( ApiCommonData::Load::TuningConfig::Table );
+# @ISA = qw( TuningManager::TuningManager::Table );
 
 
 use strict;
 use Data::Dumper;
-use ApiCommonData::Load::TuningConfig::Log;
-use ApiCommonData::Load::TuningConfig::Utils;
+use TuningManager::TuningManager::Log;
+use TuningManager::TuningManager::Utils;
 
 my $currentDate;
 
@@ -49,12 +49,12 @@ union
 SQL
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($count) = $stmt->fetchrow_array();
     $stmt->finish();
     $self->{exists} = $count;
 
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("$self->{name} does not exist")
+    TuningManager::TuningManager::Log::addErrorLog("$self->{name} does not exist")
 	if !$count;
 
     $self->checkTrigger($doUpdate);
@@ -77,10 +77,10 @@ sub getTimestamp {
        from $self->{name}$dblink
 SQL
     my $stmt = $dbh->prepare($sql)
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
-    ApiCommonData::Load::TuningConfig::Utils::sqlBugWorkaroundExecute($dbh, $stmt)
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    TuningManager::TuningManager::Utils::sqlBugWorkaroundExecute($dbh, $stmt)
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($max_mod_date, $row_count) = $stmt->fetchrow_array();
     $stmt->finish();
 
@@ -92,37 +92,37 @@ SQL
        where name = upper('$self->{name}')
 SQL
     my $stmt = $dbh->prepare($sql)
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($stored_max_mod_date, $stored_row_count, $timestamp) = $stmt->fetchrow_array();
     $stmt->finish();
 
-    my $debug = ApiCommonData::Load::TuningConfig::Log::getDebugFlag();
+    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
 
     # compare stored and calculated table stats
     if ($max_mod_date eq $stored_max_mod_date && $row_count == $stored_row_count) {
       # stored stats still valid
       $self->{timestamp} = $timestamp;
-      ApiCommonData::Load::TuningConfig::Log::addLog("    Stored timestamp ($timestamp) still valid for $self->{name}")
+      TuningManager::TuningManager::Log::addLog("    Stored timestamp ($timestamp) still valid for $self->{name}")
 	  if $debug;
     } else {
       # table has changed; tell the world, set timestamp high, and update TuningMgrExternalDependency
       if (!defined $stored_row_count) {
-	ApiCommonData::Load::TuningConfig::Log::addLog("    No TuningMgrExternalDependency record for $self->{name}");
+	TuningManager::TuningManager::Log::addLog("    No TuningMgrExternalDependency record for $self->{name}");
       } elsif ($row_count != $stored_row_count) {
-	ApiCommonData::Load::TuningConfig::Log::addLog("    Number of rows has changed for $self->{name}");
+	TuningManager::TuningManager::Log::addLog("    Number of rows has changed for $self->{name}");
       } elsif ($max_mod_date ne $stored_max_mod_date) {
-	ApiCommonData::Load::TuningConfig::Log::addLog("    max(modification_date) has changed for $self->{name}");
+	TuningManager::TuningManager::Log::addLog("    max(modification_date) has changed for $self->{name}");
       } else {
-	ApiCommonData::Load::TuningConfig::Log::addErrorLog("checking state of external dependency $self->{name}");
+	TuningManager::TuningManager::Log::addErrorLog("checking state of external dependency $self->{name}");
       }
       $self->{timestamp} = $self->getCurrentDate();
 
       if ($timestamp) {
 	# ExternalDependency record exists; update it
-	ApiCommonData::Load::TuningConfig::Log::addLog("    Stored timestamp ($timestamp) no longer valid for $self->{name}");
+	TuningManager::TuningManager::Log::addLog("    Stored timestamp ($timestamp) no longer valid for $self->{name}");
 	$sql = <<SQL;
         update apidb.TuningMgrExternalDependency$dblink
         set (max_mod_date, timestamp, row_count) =
@@ -132,7 +132,7 @@ SQL
 SQL
       } else {
 	# no ExternalDependency record; insert one
-	ApiCommonData::Load::TuningConfig::Log::addLog("    No stored timestamp found for $self->{name}");
+	TuningManager::TuningManager::Log::addLog("    No stored timestamp found for $self->{name}");
 	$sql = <<SQL;
         insert into apidb.TuningMgrExternalDependency$dblink
                     (name, max_mod_date, timestamp, row_count)
@@ -142,9 +142,9 @@ SQL
       }
 
       my $stmt = $dbh->prepare($sql)
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
       $stmt->execute()
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
       $stmt->finish();
     }
 
@@ -189,12 +189,12 @@ union
  where owner = upper('$schema') and synonym_name = upper('$table')
 SQL
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($objectType) = $stmt->fetchrow_array();
     $stmt->finish();
 
     if ($objectType eq "mview" || $objectType eq "synonym") {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("unsupported object type $objectType for " . $self->{name});
+      TuningManager::TuningManager::Log::addErrorLog("unsupported object type $objectType for " . $self->{name});
       return;
     }
 
@@ -205,7 +205,7 @@ SQL
  where owner = upper('$schema') and view_name = upper('$table')
 SQL
       $stmt->execute()
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
       my ($viewText) = $stmt->fetchrow_array();
       $stmt->finish();
 
@@ -219,7 +219,7 @@ SQL
  where table_owner = upper('$schema') and table_name = upper('$table')
 SQL
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
     my $gotModDateTrigger;
     while (my ($triggerName, $triggerText) = $stmt->fetchrow_array()) {
@@ -227,20 +227,20 @@ SQL
       if ($triggerText =~ m/modification_date/i) {
 	$gotModDateTrigger = 1;
       } else {
-	ApiCommonData::Load::TuningConfig::Log::addLog("Trigger $triggerName, on $schema.$table doesn't update modification_date");
+	TuningManager::TuningManager::Log::addLog("Trigger $triggerName, on $schema.$table doesn't update modification_date");
       }
     }
     $stmt->finish();
 
     # if it doesn't exist and -doUpdate is not set, complain
-    ApiCommonData::Load::TuningConfig::Log::addLog("$table.$schema has no trigger to keep modification_date up to date.")
+    TuningManager::TuningManager::Log::addLog("$table.$schema has no trigger to keep modification_date up to date.")
 	if (!$gotModDateTrigger && !$doUpdate);
 
     # if it doesn't exist and -doUpdate is set, create it
     if (!$gotModDateTrigger && $doUpdate) {
       my $triggerName = $table . "_md_tg";
       $triggerName =~ s/[aeiou]//gi;
-      ApiCommonData::Load::TuningConfig::Log::addLog("Creating trigger $triggerName to maintain modification_date column of " . $self->{name});
+      TuningManager::TuningManager::Log::addLog("Creating trigger $triggerName to maintain modification_date column of " . $self->{name});
       my $sqlReturn = $dbh->do(<<SQL);
 create or replace trigger $schema.$triggerName
 before update or insert on $schema.$table
@@ -251,7 +251,7 @@ end;
 SQL
 
     if (!defined $sqlReturn) {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     }
     }
 
@@ -271,7 +271,7 @@ sub getCurrentDate {
 SQL
 
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     ($self->{currentDate}) = $stmt->fetchrow_array();
     $stmt->finish();
 

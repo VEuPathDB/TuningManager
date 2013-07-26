@@ -1,9 +1,9 @@
-package ApiCommonData::Load::TuningConfig::InternalTable;
+package TuningManager::TuningManager::InternalTable;
 
-use ApiCommonData::Load::TuningConfig::TableSuffix;
-use ApiCommonData::Load::TuningConfig::Utils;
+use TuningManager::TuningManager::TableSuffix;
+use TuningManager::TuningManager::Utils;
 
-# @ISA = qw( ApiCommonData::Load::TuningConfig::Table );
+# @ISA = qw( TuningManager::TuningManager::Table );
 
 
 use strict;
@@ -62,7 +62,7 @@ SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($timestamp, $dbDef) = $stmt->fetchrow_array();
     $stmt->finish();
     $self->{timestamp} = $timestamp;
@@ -142,7 +142,7 @@ sub getState {
 
   return $self->{state} if defined $self->{state};
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("checking $self->{name}");
+  TuningManager::TuningManager::Log::addLog("checking $self->{name}");
 
   my $needUpdate;
   my $broken;
@@ -150,51 +150,51 @@ sub getState {
 
   # check if the definition is different (or none is stored)
   if (!$self->{dbDef}) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    no TuningTable record exists in database for $self->{name} -- update needed.");
+    TuningManager::TuningManager::Log::addLog("    no TuningTable record exists in database for $self->{name} -- update needed.");
     $needUpdate = 1;
   } elsif ($self->{dbDef} ne $self->getDefString()) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    stored TuningTable record (dated $self->{timestamp}) differs from current definition for $self->{name} -- update needed.");
+    TuningManager::TuningManager::Log::addLog("    stored TuningTable record (dated $self->{timestamp}) differs from current definition for $self->{name} -- update needed.");
     $needUpdate = 1;
-    ApiCommonData::Load::TuningConfig::Log::addLog("stored:\n-------\n" . $self->{dbDef} . "\n-------")
+    TuningManager::TuningManager::Log::addLog("stored:\n-------\n" . $self->{dbDef} . "\n-------")
 	if $self->{debug};
-    ApiCommonData::Load::TuningConfig::Log::addLog("current:\n-------\n" . $self->getDefString() . "\n-------")
+    TuningManager::TuningManager::Log::addLog("current:\n-------\n" . $self->getDefString() . "\n-------")
 	if $self->{debug};
   }
 
   # check internal dependencies
   foreach my $dependency (@{$self->getInternalDependencies()}) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    depends on tuning table " . $dependency->getName());
+    TuningManager::TuningManager::Log::addLog("    depends on tuning table " . $dependency->getName());
 
     # increase log-file indentation for recursive call
-    ApiCommonData::Load::TuningConfig::Log::increaseIndent();
+    TuningManager::TuningManager::Log::increaseIndent();
     my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $registry, $prefix, $filterValue);
-    ApiCommonData::Load::TuningConfig::Log::decreaseIndent();
+    TuningManager::TuningManager::Log::decreaseIndent();
 
     if ($childState eq "neededUpdate" || $dependency->getTimestamp() gt $self->getTimestamp()) {
       $needUpdate = 1;
-      ApiCommonData::Load::TuningConfig::Log::addLog("    $self->{name} needs update because it depends on " . $dependency->getName() . ", which was found to be out of date (or is simply newer).");
+      TuningManager::TuningManager::Log::addLog("    $self->{name} needs update because it depends on " . $dependency->getName() . ", which was found to be out of date (or is simply newer).");
     } elsif ($childState eq "broken") {
       $broken = 1;
-      ApiCommonData::Load::TuningConfig::Log::addLog("    $self->{name} is broken because it depends on " . $dependency->getName() . ", which is broken.");
+      TuningManager::TuningManager::Log::addLog("    $self->{name} is broken because it depends on " . $dependency->getName() . ", which is broken.");
     }
   }
 
   # check external dependencies
   foreach my $dependency (@{$self->getExternalDependencies()}) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    depends on external table " . $dependency->getName());
+    TuningManager::TuningManager::Log::addLog("    depends on external table " . $dependency->getName());
     if ($dependency->getTimestamp() gt $self->{timestamp}) {
       $needUpdate = 1;
-      ApiCommonData::Load::TuningConfig::Log::addLog("    creation timestamp of $self->{name} ($self->{timestamp}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
+      TuningManager::TuningManager::Log::addLog("    creation timestamp of $self->{name} ($self->{timestamp}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
     }
   }
 
   # check external tuning-table dependencies
   if ($self->getExternalTuningTableDependencies()) {
     foreach my $dependency (@{$self->getExternalTuningTableDependencies()}) {
-      ApiCommonData::Load::TuningConfig::Log::addLog("    depends on external tuning table " . $dependency->getName());
+      TuningManager::TuningManager::Log::addLog("    depends on external tuning table " . $dependency->getName());
       if ($dependency->getTimestamp() gt $self->{timestamp}) {
 	$needUpdate = 1;
-	ApiCommonData::Load::TuningConfig::Log::addLog("    creation timestamp of $self->{name} ($self->{timestamp}) is older than creation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
+	TuningManager::TuningManager::Log::addLog("    creation timestamp of $self->{name} ($self->{timestamp}) is older than creation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
       }
     }
   }
@@ -206,12 +206,12 @@ sub getState {
 SQL
   $dbh->{PrintError} = 1;
   if (!$stmt) {
-	ApiCommonData::Load::TuningConfig::Log::addLog("    query against $self->{name} failed -- update needed.");
+	TuningManager::TuningManager::Log::addLog("    query against $self->{name} failed -- update needed.");
 	$needUpdate = 1
   }
 
   if ($self->{alwaysUpdate}) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
+    TuningManager::TuningManager::Log::addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
   }
 
   $tableStatus = "up-to-date";
@@ -220,7 +220,7 @@ SQL
 
   if ( ($doUpdate and $needUpdate) or $self->{alwaysUpdate} or ($doUpdate and $prefix)) {
     if ($prefix && !$self->{prefixEnabled}) {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("attempt to update tuning table " . $self->{name} . ", which does not have the prefixEnabled attribute");
+      TuningManager::TuningManager::Log::addErrorLog("attempt to update tuning table " . $self->{name} . ", which does not have the prefixEnabled attribute");
       $broken = 1;
     } else {
       my $updateResult = $self->update($dbh, $purgeObsoletes, $registry, $prefix, $filterValue);
@@ -233,19 +233,19 @@ SQL
     }
   }
 
-  ApiCommonData::Load::TuningConfig::Log::setUpdateNeededFlag()
+  TuningManager::TuningManager::Log::setUpdateNeededFlag()
       if ($needUpdate or $prefix) and !$self->{alwaysUpdate};  # don't set the update flag for alwaysUpdate tables
 
   if ($broken) {
     $self->{state} = "broken";
-    ApiCommonData::Load::TuningConfig::Log::setErrorsEncounteredFlag();
+    TuningManager::TuningManager::Log::setErrorsEncounteredFlag();
   } elsif ($needUpdate or $prefix) {
     $self->{state} = "neededUpdate";
   } else {
     $self->{state} = "up-to-date";
   }
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("    $self->{name} found to be \"$self->{state}\"");
+  TuningManager::TuningManager::Log::addLog("    $self->{name} found to be \"$self->{state}\"");
 
   $self->setStatus($dbh, $tableStatus);
   return $self->{state};
@@ -256,14 +256,14 @@ sub update {
 
   my $startTime = time;
 
-  ApiCommonData::Load::TuningConfig::Log::setUpdatePerformedFlag()
+  TuningManager::TuningManager::Log::setUpdatePerformedFlag()
       unless $self->{alwaysUpdate};
 
-  my $suffix = ApiCommonData::Load::TuningConfig::TableSuffix::getSuffix($dbh);
+  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh);
 
   my $dateString = `date`;
   chomp($dateString);
-  ApiCommonData::Load::TuningConfig::Log::addLog("    Rebuilding tuning table " . $self->{name} . " on $dateString");
+  TuningManager::TuningManager::Log::addLog("    Rebuilding tuning table " . $self->{name} . " on $dateString");
 
   $self->dropIntermediateTables($dbh, $prefix);
 
@@ -273,7 +273,7 @@ sub update {
 
     last if $updateError;
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("running unionization to build $self->{name}\n")
+    TuningManager::TuningManager::Log::addLog("running unionization to build $self->{name}\n")
 	if $self->{debug};
 
     $self->unionize($unionization, $dbh);
@@ -282,7 +282,7 @@ sub update {
   foreach my $sql (@{$self->{sqls}}) {
 
     if ($sql =~ /]]>/) {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("SQL contains embedded CDATA close -- possible XML parse error. SQL -->>" . $sql . "<<--");
+      TuningManager::TuningManager::Log::addErrorLog("SQL contains embedded CDATA close -- possible XML parse error. SQL -->>" . $sql . "<<--");
     }
 
     last if $updateError;
@@ -306,19 +306,19 @@ sub update {
     my $dblink = $self->{dblink};
     $sqlCopy =~ s/&dblink/$dblink/g;
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("vvvvvv sql string changed: vvvvvv\nbefore: \"$sql\"\nafter: \"$sqlCopy\"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+    TuningManager::TuningManager::Log::addLog("vvvvvv sql string changed: vvvvvv\nbefore: \"$sql\"\nafter: \"$sqlCopy\"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 	if $self->{debug} && $sqlCopy ne $sql;
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("running sql of length "
+    TuningManager::TuningManager::Log::addLog("running sql of length "
 						   . length($sqlCopy)
 						   . " to build $self->{name}:\n$sqlCopy")
 	if $self->{debug};
 
-    $updateError = 1 if !ApiCommonData::Load::TuningConfig::Utils::sqlBugWorkaroundDo($dbh, $sqlCopy);;
+    $updateError = 1 if !TuningManager::TuningManager::Utils::sqlBugWorkaroundDo($dbh, $sqlCopy);;
 
     if ($dbh->errstr =~ /ORA-01652/) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("Setting out-of-space flag, so notification email is sent.");
-      ApiCommonData::Load::TuningConfig::Log::setOutOfSpaceMessage($dbh->errstr);
+    TuningManager::TuningManager::Log::addLog("Setting out-of-space flag, so notification email is sent.");
+      TuningManager::TuningManager::Log::setOutOfSpaceMessage($dbh->errstr);
     }
 
   }
@@ -329,13 +329,13 @@ sub update {
     my $perlCopy = $perl;
     $perlCopy =~ s/&1/$suffix/g;  # use suffix to make db object names unique
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
+    TuningManager::TuningManager::Log::addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
 	if $self->{debug};
     eval $perlCopy;
 
     if ($@) {
       $updateError = 1;
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("Error \"$@\" encountered executing Perl statement beginning:\n" . substr($perlCopy, 1, 100) );
+      TuningManager::TuningManager::Log::addErrorLog("Error \"$@\" encountered executing Perl statement beginning:\n" . substr($perlCopy, 1, 100) );
     }
   }
 
@@ -358,21 +358,21 @@ sub update {
                       . $debug
                       . " 2>&1 ";
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("running program with command line \"" . $commandLine . "\" to build $self->{name}");
+    TuningManager::TuningManager::Log::addLog("running program with command line \"" . $commandLine . "\" to build $self->{name}");
 
     open(PROGRAM, $commandLine . "|");
     while (<PROGRAM>) {
       my $line = $_;
       chomp($line);
-      ApiCommonData::Load::TuningConfig::Log::addLog($line);
+      TuningManager::TuningManager::Log::addLog($line);
     }
     close(PROGRAM);
     my $exitCode = $? >> 8;
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("finished running program, with exit code $exitCode");
+    TuningManager::TuningManager::Log::addLog("finished running program, with exit code $exitCode");
 
     if ($exitCode) {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("unable to run standalone program:\n$commandLine");
+      TuningManager::TuningManager::Log::addErrorLog("unable to run standalone program:\n$commandLine");
       $updateError = 1;
     }
   }
@@ -386,27 +386,27 @@ sub update {
 
   # publish ancillary tables
   foreach my $ancillary (@{$self->{ancillaryTables}}) {
-      ApiCommonData::Load::TuningConfig::Log::addLog("publishing ancillary table " . $ancillary->{name});
+      TuningManager::TuningManager::Log::addLog("publishing ancillary table " . $ancillary->{name});
       $self->publish($ancillary->{name}, $suffix, $dbh, $purgeObsoletes, $prefix) or return "broken";
   }
 
   # store definition
   if (!$prefix) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("unable to store table definition")
+    TuningManager::TuningManager::Log::addErrorLog("unable to store table definition")
 	if $self->storeDefinition($dbh);
   }
 
   my $buildDuration = time - $startTime;
   my $recordCount = getRecordCount($dbh, $self->{name}, $prefix);
-  ApiCommonData::Load::TuningConfig::Log::addLog("    $buildDuration seconds to rebuild tuning table "
+  TuningManager::TuningManager::Log::addLog("    $buildDuration seconds to rebuild tuning table "
                                                  . $self->{name} . " with record count of " . $recordCount);
 
   if ($maxRebuildMinutes) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("table rebuild took longer than $maxRebuildMinutes minute maximum.")
+    TuningManager::TuningManager::Log::addErrorLog("table rebuild took longer than $maxRebuildMinutes minute maximum.")
       if ($buildDuration > $maxRebuildMinutes * 60)
   }
 
-  ApiCommonData::Load::TuningConfig::Log::logRebuild($dbh, $self->{name}, $buildDuration, $registry->getInstanceName(), $registry->getDblink(), $recordCount)
+  TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration, $registry->getInstanceName(), $registry->getDblink(), $recordCount)
       if !$prefix;
 
   return "neededUpdate"
@@ -420,7 +420,7 @@ sub getRecordCount {
     select count(*) from $prefix$name
 SQL
   $stmt->execute()
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   my ($recordCount) = $stmt->fetchrow_array();
   $stmt->finish();
 
@@ -437,7 +437,7 @@ SQL
 
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   $stmt->finish();
 
   my $sql = <<SQL;
@@ -449,7 +449,7 @@ SQL
   my $stmt = $dbh->prepare($sql);
 
   if (!$stmt->execute($self->{qualifiedName}, $self->getDefString())) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
 
@@ -513,7 +513,7 @@ sub hasDependencyCycle {
 
     # log error if $self is earliest ancestor
     if ($ancestorsRef->[0] eq $self->{name}) {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("ERROR: cycle of dependencies: " .
+      TuningManager::TuningManager::Log::addErrorLog("ERROR: cycle of dependencies: " .
 						     join(" -> ", @{$ancestorsRef}) .
 						    " -> " . $self->{name});
       return 1;
@@ -538,7 +538,7 @@ sub dropIntermediateTables {
   my ($self, $dbh, $prefix, $warningFlag) = @_;
 
   foreach my $intermediate (@{$self->{intermediateTables}}) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    must drop intermediate table $prefix$intermediate->{name}");
+    TuningManager::TuningManager::Log::addLog("    must drop intermediate table $prefix$intermediate->{name}");
 
     my $sql = <<SQL;
        drop table $prefix$intermediate->{name}
@@ -550,7 +550,7 @@ SQL
     $stmt->finish();
     $dbh->{PrintError} = 1;
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("WARNING: intermediateTable"
+    TuningManager::TuningManager::Log::addLog("WARNING: intermediateTable"
 						   . $intermediate->{name}
 						   . " was not created during the update of "
 						   . $self->{name})
@@ -570,7 +570,7 @@ SQL
   my $stmt = $dbh->prepare($sql);
   my $grantRtn = $stmt->execute();
   if (!$grantRtn) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("Failure on GRANT for new table:" . $dbh->errstr . "\n");
+    TuningManager::TuningManager::Log::addErrorLog("Failure on GRANT for new table:" . $dbh->errstr . "\n");
     return 0;
   }
   $stmt->finish();
@@ -594,7 +594,7 @@ SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute("$prefix$table")
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     ($oldTable) = $stmt->fetchrow_array();
     $stmt->finish();
   } else {
@@ -609,7 +609,7 @@ SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute("$prefix$table")
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     $stmt->finish();
   }
 
@@ -620,19 +620,19 @@ SQL
   my $synonymRtn = $dbh->do($sql);
 
   if (!defined $synonymRtn) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   }
 
   # drop obsolete table, if we're doing that (and it exists)
   if (defined $synonymRtn && $purgeObsoletes && $oldTable) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("    purging obsolete table " . $oldTable);
+    TuningManager::TuningManager::Log::addLog("    purging obsolete table " . $oldTable);
     $dbh->do("drop table " . $oldTable)
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   }
 
   # Run stored procedure to analye new table
   $dbh->do("BEGIN apidb.analyze('" . $self->{schema} . "', '$prefix$table$suffix'); END;")
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
   return $synonymRtn
 }
@@ -677,16 +677,16 @@ sub unionize {
   }
 
   unless(scalar @{$union->{source}} == scalar @unionMembers) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("The number of <source> does not equal the number of sql statments to be unioned for " . $self->{name});
+    TuningManager::TuningManager::Log::addErrorLog("The number of <source> does not equal the number of sql statments to be unioned for " . $self->{name});
     die;
   }
 
-  my $suffix = ApiCommonData::Load::TuningConfig::TableSuffix::getSuffix($dbh);
+  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh);
 
   my $createTable = "create table $union->{name}$suffix as\n"
     . join("\nunion\n", @unionMembers);
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("creating union table with following statement:\n$createTable") if $self->{debug};
+  TuningManager::TuningManager::Log::addLog("creating union table with following statement:\n$createTable") if $self->{debug};
   runSql($dbh, $createTable);
 }
 
@@ -794,7 +794,7 @@ SQL
 
   my $stmt = $dbh->prepare($sql);
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("setting status of tuning table \""
+  TuningManager::TuningManager::Log::addLog("setting status of tuning table \""
 						 . $self->{qualifiedName} . "\" to \""
 						 . $status . "\"");
 
@@ -802,7 +802,7 @@ SQL
   chomp($osUser);
 
   if (!$stmt->execute($status, $osUser, $self->{qualifiedName})) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
 

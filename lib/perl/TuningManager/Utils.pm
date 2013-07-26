@@ -1,8 +1,8 @@
-package ApiCommonData::Load::TuningConfig::Utils;
+package TuningManager::TuningManager::Utils;
 
 
 use DBI;
-use ApiCommonData::Load::TuningConfig::Log;
+use TuningManager::TuningManager::Log;
 use XML::Simple;
 
 sub sqlBugWorkaroundDo {
@@ -17,26 +17,26 @@ sub sqlBugWorkaroundDo {
   do {
 
     $attempts++;
-    ApiCommonData::Load::TuningConfig::Log::addLog("retrying -- \$attemps $attempts, \$SQL_RETRIES $SQL_RETRIES")
+    TuningManager::TuningManager::Log::addLog("retrying -- \$attemps $attempts, \$SQL_RETRIES $SQL_RETRIES")
       if $attempts > 1;
 
-    my $debug = ApiCommonData::Load::TuningConfig::Log::getDebugFlag();
+    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
 
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime();
     my $timestamp = sprintf('%02d:%02d:%02d', $hour, $min, $sec);
-    ApiCommonData::Load::TuningConfig::Log::addLog("executing sql at $timestamp")
+    TuningManager::TuningManager::Log::addLog("executing sql at $timestamp")
 	if $debug;
 
     $sqlReturn = $dbh->do($sql);
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("sql returned \"$sqlReturn\"; \$dbh->errstr = \"" . $dbh->errstr . "\"")
+    TuningManager::TuningManager::Log::addLog("sql returned \"$sqlReturn\"; \$dbh->errstr = \"" . $dbh->errstr . "\"")
 	if $debug;
 
     if (defined $sqlReturn) {
       $thisSqlWorked = 1;
     } else {
       $thisSqlWorked = 0;
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     }
 
 
@@ -62,11 +62,11 @@ sub sqlBugWorkaroundExecute {
     addLog("retrying -- \$attemps $attempts, \$SQL_RETRIES $SQL_RETRIES")
       if $attempts > 1;
 
-    my $debug = ApiCommonData::Load::TuningConfig::Log::getDebugFlag();
+    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
 
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime();
     my $timestamp = sprintf('%02d:%02d:%02d', $hour, $min, $sec);
-    ApiCommonData::Load::TuningConfig::Log::addLog("executing sql at $timestamp")
+    TuningManager::TuningManager::Log::addLog("executing sql at $timestamp")
 	if $debug;
 
     eval {
@@ -74,17 +74,17 @@ sub sqlBugWorkaroundExecute {
     };
 
     # log any errors inside eval
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog($@)
+    TuningManager::TuningManager::Log::addErrorLog($@)
 	if $@;
 
-    ApiCommonData::Load::TuningConfig::Log::addLog("sql returned \"$sqlReturn\"; \$dbh->errstr = \"" . $dbh->errstr . "\"")
+    TuningManager::TuningManager::Log::addLog("sql returned \"$sqlReturn\"; \$dbh->errstr = \"" . $dbh->errstr . "\"")
 	if $debug;
 
     if (defined $sqlReturn) {
       $thisSqlWorked = 1;
     } else {
       $thisSqlWorked = 0;
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     }
 
 

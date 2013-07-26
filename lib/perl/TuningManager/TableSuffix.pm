@@ -1,6 +1,6 @@
-package ApiCommonData::Load::TuningConfig::TableSuffix;
+package TuningManager::TuningManager::TableSuffix;
 
-use ApiCommonData::Load::TuningConfig::Log;
+use TuningManager::TuningManager::Log;
 
 BEGIN {
 
@@ -22,11 +22,11 @@ SQL
 
       my $stmt = $dbh->prepare($sql);
       $stmt->execute()
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog($dbh->errstr);
+	or TuningManager::TuningManager::Log::addErrorLog($dbh->errstr);
       ($suffix) = $stmt->fetchrow_array();
       $stmt->finish();
 
-      ApiCommonData::Load::TuningConfig::Log::addLog("    Creating tuning tables with the suffix $suffix");
+      TuningManager::TuningManager::Log::addLog("    Creating tuning tables with the suffix $suffix");
 
     }
 
