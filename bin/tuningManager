@@ -6,14 +6,13 @@ use Data::Dumper;
 use XML::Simple;
 use DBI;
 use Getopt::Long qw(GetOptions);
-use ApiCommonData::Load::TuningConfig::InternalTable;
-use ApiCommonData::Load::TuningConfig::ExternalTable;
-use ApiCommonData::Load::TuningConfig::ExternalTuningTable;
-use ApiCommonData::Load::TuningConfig::TuningIndex;
-use ApiCommonData::Load::TuningConfig::TuningRegistry;
-use ApiCommonData::Load::TuningConfig::Log;
-use ApiCommonData::Load::TuningConfig::TableSuffix;
-use ApiCommonData::Load::TuningConfig::Utils;
+use TuningManager::TuningManager::InternalTable;
+use TuningManager::TuningManager::ExternalTable;
+use TuningManager::TuningManager::ExternalTuningTable;
+use TuningManager::TuningManager::TuningIndex;
+use TuningManager::TuningManager::Log;
+use TuningManager::TuningManager::TableSuffix;
+use TuningManager::TuningManager::Utils;
 
 my $subversionDir;
 my $props;
@@ -27,8 +26,8 @@ my $timestamp = sprintf('%4d-%02d-%02d %02d:%02d:%02d', $year+1900, $mon+1, $mda
 
 my $osUser = `whoami`;
 chomp($osUser);
-ApiCommonData::Load::TuningConfig::Log::addLogPreamble("Starting tuningManager as OS user \"$osUser\", "
-					       . ApiCommonData::Load::TuningConfig::Log::getProcessInfo()
+TuningManager::TuningManager::Log::addLogPreamble("Starting tuningManager as OS user \"$osUser\", "
+					       . TuningManager::TuningManager::Log::getProcessInfo()
 					       . " at $timestamp with arguments:\n"
 					       . join(' ', @ARGV));
 
@@ -56,18 +55,18 @@ GetOptions("configFile=s" => \$configFile,
            "filterValue=s" => \$filterValue,
 	  );
 
-ApiCommonData::Load::TuningConfig::Log::setLogfile($logfile);
+TuningManager::TuningManager::Log::setLogfile($logfile);
 
-ApiCommonData::Load::TuningConfig::Log::setDebugFlag()
+TuningManager::TuningManager::Log::setDebugFlag()
   if $debug;
 
-ApiCommonData::Load::TuningConfig::Log::addErrorLog("parameter error: either \"propFile\" or \"password\" must be specified")
-  unless ($propFile || $password);
-ApiCommonData::Load::TuningConfig::Log::addErrorLog("parameter error: \"instance\" must be specified")
+TuningManager::TuningManager::Log::addErrorLog("parameter error: \"propFile\" must be specified")
+  unless ($propFile);
+TuningManager::TuningManager::Log::addErrorLog("parameter error: \"instance\" must be specified")
   unless $instance;
-ApiCommonData::Load::TuningConfig::Log::addErrorLog("parameter error: \"configFile\" must be specified if \"prefix\" is used")
-  unless ($configFile || !$prefix);
-&usage unless ($instance && ($propFile || $password) && ($configFile || !$prefix));
+TuningManager::TuningManager::Log::addErrorLog("parameter error: \"configFile\" must be specified")
+  unless $configFile;
+&usage unless ($instance && $propFile && $configFile);
 
 exit if ($noArgs); # don't send a log email if they only want usage
 
@@ -75,7 +74,7 @@ $cleanupAge = 0 if !defined $cleanupAge;
 
 $doUpdate = 1 if $forceUpdate;
 
-my ($dbh, $tuningRegistry, $brokenCount, $neededUpdateCount);
+my ($dbh, $brokenCount, $neededUpdateCount);
 eval {
   if ($propFile) {
     my $simple = XML::Simple->new();
@@ -84,7 +83,7 @@ eval {
     my $badProp;
     foreach my $foundProp (keys(%{$props})) {
       if (!$permittedProperties{$foundProp}) {
-	ApiCommonData::Load::TuningConfig::Log::addErrorLog("invalid property \"$foundProp\"");
+	TuningManager::TuningManager::Log::addErrorLog("invalid property \"$foundProp\"");
 	$badProp = 1;
       }
     }
@@ -93,50 +92,36 @@ eval {
 
   # prefer schema from command line, then prop file, then hardwired default
   $schema = $props->{schema} if !$schema;
-  $schema = 'ApidbTuning' if !$schema;
+  $schema = 'TuningManager' if !$schema;
 
   $maxRebuildMinutes = $props->{maxRebuildMinutes};
 
-  if ($props->{dbaEmail}) {
-    $dbaEmail = $props->{dbaEmail} if $props->{dbaEmail};
-    $fromEmail = $props->{fromEmail} if $props->{fromEmail};
-  } else {
-    $dbaEmail = 'tuningMgr@pcbi.upenn.edu';
-    $fromEmail = 'tuningMgr@pcbi.upenn.edu';
-  }
+  $dbaEmail = $props->{dbaEmail} if $props->{dbaEmail};
+  $fromEmail = $props->{fromEmail} if $props->{fromEmail};
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("creating tuning tables with the prefix \"$prefix\"")
+  TuningManager::TuningManager::Log::addLog("creating tuning tables with the prefix \"$prefix\"")
       if $prefix;
 
   $SIG{INT} = \&catch_signal;
   $SIG{TERM} = \&catch_signal;
 
-  ($instance, $schema, $password) = ApiCommonData::Load::TuningConfig::Utils::getDbLoginInfo($instance, $propFile, $schema, $password);
-  ApiCommonData::Load::TuningConfig::Log::addLog("Logging in to the database as (and creating tuning tables in) the schema \"$schema\".");
-  $dbh = ApiCommonData::Load::TuningConfig::Utils::getDbHandle($instance, $schema, $password);
+  ($instance, $schema, $password) = TuningManager::TuningManager::Utils::getDbLoginInfo($instance, $propFile, $schema, $password);
+  TuningManager::TuningManager::Log::addLog("Logging in to the database as (and creating tuning tables in) the schema \"$schema\".");
+  $dbh = TuningManager::TuningManager::Utils::getDbHandle($instance, $schema, $password);
 
-  $tuningRegistry =
-    ApiCommonData::Load::TuningConfig::TuningRegistry->new($dbh, $props->{dblink})
-	if !$prefix;
-
-  if (!$prefix && (lc($instance) ne lc($tuningRegistry->getInstanceName()))) {
-    die("instance name \"$instance\" does not match apidb.InstanceMetaInfo.instance_nickname \"" . $tuningRegistry->getInstanceName() . "\"");
-  }
-
-  # get and validate config file
-  $configFile = getConfigFileName($configFile, $tuningRegistry, $prefix);
-  ApiCommonData::Load::TuningConfig::Log::addLog("Using config file \"$configFile\"");
+  # validate config file
+  TuningManager::TuningManager::Log::addLog("Using config file \"$configFile\"");
   my $validationCmd = "validateXmlWithRng $ENV{GUS_HOME}/lib/rng/tuningManager.rng $configFile |";
-  ApiCommonData::Load::TuningConfig::Log::addLog("Validating XML:\n" . $validationCmd);
+  TuningManager::TuningManager::Log::addLog("Validating XML:\n" . $validationCmd);
   open(PROGRAM, $validationCmd);
   while (<PROGRAM>) {
     my $line = $_;
     chomp($line);
-    ApiCommonData::Load::TuningConfig::Log::addLog($line);
+    TuningManager::TuningManager::Log::addLog($line);
   }
   close(PROGRAM);
   my $exitCode = $? >> 8;
-  ApiCommonData::Load::TuningConfig::Log::addErrorLog("invalid config file") if $exitCode;
+  TuningManager::TuningManager::Log::addErrorLog("invalid config file") if $exitCode;
 #   die "invalid config file" if $exitCode;
 
   my ($config) = &parseConfigFile($configFile);
@@ -151,7 +136,7 @@ eval {
   foreach my $tuningTable (@{$config->{tuningTable}}) {
 
     $tuningTables{$tuningTable->{name}}
-      = ApiCommonData::Load::TuningConfig::InternalTable->
+      = TuningManager::TuningManager::InternalTable->
 	new($tuningTable->{name}, $tuningTable->{internalDependency}, $tuningTable->{externalDependency},
 	    $tuningTable->{externalTuningTableDependency}, $tuningTable->{intermediateTable},
             $tuningTable->{ancillaryTable}, $tuningTable->{sql}, $tuningTable->{perl},
@@ -167,7 +152,7 @@ eval {
   }
 
   # validate config / check external files
-  ApiCommonData::Load::TuningConfig::Log::addLogBanner("Using configuration file and checking external files");
+  TuningManager::TuningManager::Log::addLogBanner("Using configuration file and checking external files");
   my $undefinedInternal;
   my $nonexistentExternal;
   my $nonexistentExternalTuningTable;
@@ -178,7 +163,7 @@ eval {
     if ($tuningTables{$tableName}->getInternalDependencyNames()) {
       foreach my $dependency (@{$tuningTables{$tableName}->getInternalDependencyNames()}) {
 	if (!$tuningTables{$dependency->{name}}) {
-	  ApiCommonData::Load::TuningConfig::Log::addErrorLog("$tableName has an InternalDependency on $dependency->{name}, for which no description is supplied");
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an InternalDependency on $dependency->{name}, for which no description is supplied");
 	  $undefinedInternal = 1;
 	} else {
 	  # add object to list of internal dependencies
@@ -194,7 +179,7 @@ eval {
 	# new ExternalTable instance in the hash, if we haven't seen this
 	my $key = $dependency->{name} . '@' . $dependency->{dblink};
 	$externalTables{$key}
-	  = ApiCommonData::Load::TuningConfig::ExternalTable->
+	  = TuningManager::TuningManager::ExternalTable->
 	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate,
 		$dblinkSuffix)
 	      unless ($externalTables{$key});
@@ -203,7 +188,7 @@ eval {
 	$tuningTables{$tableName}->addExternalDependency($externalTables{$key});
 
 	if (!$externalTables{$key}->exists()) {
-	  ApiCommonData::Load::TuningConfig::Log::addErrorLog("$tableName has an ExternalDependency on $dependency->{name}, but no such table exists");
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an ExternalDependency on $dependency->{name}, but no such table exists");
 	  $nonexistentExternal = 1;
 	}
       }
@@ -216,7 +201,7 @@ eval {
 	# new ExternalTuningTable instance in the hash, if we haven't seen this
 	my $key = $dependency->{name} . '@' . $dependency->{dblink};
 	$externalTuningTables{$key}
-	  = ApiCommonData::Load::TuningConfig::ExternalTuningTable->
+	  = TuningManager::TuningManager::ExternalTuningTable->
 	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate,
 		$tuningRegistry->getDblinkSuffix())
 	      unless ($externalTuningTables{$key});
@@ -225,7 +210,7 @@ eval {
 	$tuningTables{$tableName}->addExternalTuningTableDependency($externalTuningTables{$key});
 
 	if (!$externalTuningTables{$key}->exists()) {
-	  ApiCommonData::Load::TuningConfig::Log::addErrorLog("$tableName has an ExternalTuningDependency on $key, but no such table exists");
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an ExternalTuningDependency on $key, but no such table exists");
 	  $nonexistentExternalTuningTable = 1;
 	}
       }
@@ -239,21 +224,21 @@ eval {
   }
 
   if ($undefinedInternal || $nonexistentExternal || $nonexistentExternalTuningTable || $dependencyCycle) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("INVALID CONFIGURATION -- NOT UPDATING DATABASE");
+    TuningManager::TuningManager::Log::addErrorLog("INVALID CONFIGURATION -- NOT UPDATING DATABASE");
     $doUpdate = 0;
   } else {
-    ApiCommonData::Load::TuningConfig::Log::addLog("Configuration file OK");
+    TuningManager::TuningManager::Log::addLog("Configuration file OK");
   }
 
   # indexes
-  ApiCommonData::Load::TuningConfig::Log::addLogBanner("Checking indexes");
+  TuningManager::TuningManager::Log::addLogBanner("Checking indexes");
   my $indexesConfigured;
   my $missingIndexes;
   foreach my $tuningIndex (@{$config->{tuningIndex}}) {
 
     $indexesConfigured++;
     my $indexObject =
-      ApiCommonData::Load::TuningConfig::TuningIndex->
+      TuningManager::TuningManager::TuningIndex->
 	  new($tuningIndex->{name},
 	      $tuningIndex->{table},
 	      $tuningIndex->{content},
@@ -261,7 +246,7 @@ eval {
 
     if (!$indexObject->exists()) {
       $missingIndexes++;
-      ApiCommonData::Load::TuningConfig::Log::addLog("must " . $indexObject->getCreateStatement());
+      TuningManager::TuningManager::Log::addLog("must " . $indexObject->getCreateStatement());
 
       $indexObject->create($dbh)
 	if $doUpdate;
@@ -274,7 +259,7 @@ eval {
   $neededUpdateCount = 0;
   my $upToDateCount = 0;
 
-  ApiCommonData::Load::TuningConfig::Log::addLogBanner("Checking whether tuning tables are up to date");
+  TuningManager::TuningManager::Log::addLogBanner("Checking whether tuning tables are up to date");
   # check (and potentially update) every tuning table
   my @tableList;
   if ($tables) {
@@ -285,7 +270,7 @@ eval {
 
   foreach my $table (@tableList) {
     if (!$tuningTables{$table}) {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("unknown tuning table $table");
+      TuningManager::TuningManager::Log::addErrorLog("unknown tuning table $table");
       next;
     }
 
@@ -299,33 +284,33 @@ eval {
     } elsif ($state eq "up-to-date") {
       $upToDateCount++;
     } else {
-      ApiCommonData::Load::TuningConfig::Log::addErrorLog("invalid state $state");
+      TuningManager::TuningManager::Log::addErrorLog("invalid state $state");
     }
   }
 
   # cleanup
-  ApiCommonData::Load::TuningConfig::Log::addLogBanner("Cleanup");
+  TuningManager::TuningManager::Log::addLogBanner("Cleanup");
   cleanup($dbh, $cleanupAge, $cleanupWarnOnly, $prefix);
 
   &checkForUnusableIndexes;
 
   # summary
   if (!$tableCount) {
-    ApiCommonData::Load::TuningConfig::Log::addLog("No tuningTable entities were defined in the config file");
+    TuningManager::TuningManager::Log::addLog("No tuningTable entities were defined in the config file");
   } else {
     my $summaryString = "\n$tableCount table(s) defined: $upToDateCount up-to-date, $neededUpdateCount "
       . ($doUpdate ? "updated" : "needing update")
 	. ", $brokenCount broken";
     $summaryString .= " -- tuningManager ran successfully"
-      if !ApiCommonData::Load::TuningConfig::Log::getErrorsEncounteredFlag();
-    ApiCommonData::Load::TuningConfig::Log::addLogPreamble($summaryString);
+      if !TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
+    TuningManager::TuningManager::Log::addLogPreamble($summaryString);
   }
 
   # list broken tables
   if ($brokenCount) {
-    ApiCommonData::Load::TuningConfig::Log::addLogPreamble("   broken table(s):");
+    TuningManager::TuningManager::Log::addLogPreamble("   broken table(s):");
     foreach my $table (@tableList) {
-      ApiCommonData::Load::TuningConfig::Log::addLogPreamble("     " . $tuningTables{$table}->getName())
+      TuningManager::TuningManager::Log::addLogPreamble("     " . $tuningTables{$table}->getName())
 	  if $tuningTables{$table}->getState($doUpdate, $dbh) eq "broken";
     }
   }
@@ -334,24 +319,24 @@ eval {
   # list updated/outdated tables
   if ($neededUpdateCount) {
     if ($doUpdate) {
-      ApiCommonData::Load::TuningConfig::Log::addLogPreamble("   table(s) updated:");
+      TuningManager::TuningManager::Log::addLogPreamble("   table(s) updated:");
     } else {
-      ApiCommonData::Load::TuningConfig::Log::addLogPreamble("   table(s) needing update:");
+      TuningManager::TuningManager::Log::addLogPreamble("   table(s) needing update:");
     }
     foreach my $table (@tableList) {
-      ApiCommonData::Load::TuningConfig::Log::addLogPreamble("     " . $tuningTables{$table}->getName())
+      TuningManager::TuningManager::Log::addLogPreamble("     " . $tuningTables{$table}->getName())
 	  if $tuningTables{$table}->getState($doUpdate, $dbh) eq "neededUpdate";
     }
   }
 
   if (!$indexesConfigured) {
-    ApiCommonData::Load::TuningConfig::Log::addLogPreamble("No tuningIndex entities were defined in the config file");
+    TuningManager::TuningManager::Log::addLogPreamble("No tuningIndex entities were defined in the config file");
   } elsif ($missingIndexes) {
-    ApiCommonData::Load::TuningConfig::Log::addLogPreamble($missingIndexes . " of the "
+    TuningManager::TuningManager::Log::addLogPreamble($missingIndexes . " of the "
 						   . $indexesConfigured
 						   . " indexes configured were found to be missing");
   } else {
-    ApiCommonData::Load::TuningConfig::Log::addLogPreamble("All "
+    TuningManager::TuningManager::Log::addLogPreamble("All "
 						   . $indexesConfigured
 						   . " indexes were found to exist.");
   }
@@ -362,7 +347,7 @@ eval {
   if ($subversionDir && !$prefix) {
     my @cmdLine = ("rm", "-rf", $subversionDir);
     system(@cmdLine) == 0
-      or ApiCommonData::Load::TuningConfig::Log::addErrorLog("unable to remove temporary config directory");
+      or TuningManager::TuningManager::Log::addErrorLog("unable to remove temporary config directory");
   }
 
   # set notifyEmail (for log email)
@@ -373,28 +358,28 @@ eval {
 };
 
 # log any errors inside eval
-ApiCommonData::Load::TuningConfig::Log::addErrorLog($@)
+TuningManager::TuningManager::Log::addErrorLog($@)
   if $@;
 
 my $elapsed = time - $startTime;
 my $hms = sprintf('%02d:%02d:%02d', $elapsed / 3600, ($elapsed % 3600) / 60, $elapsed % 60);
 
-ApiCommonData::Load::TuningConfig::Log::addLogPreamble(time - $startTime .
+TuningManager::TuningManager::Log::addLogPreamble(time - $startTime .
 					       " seconds to run tuningManager ($hms)\n\n");
 
 $notifyEmail = "tuningMgr\@pcbi.upenn.edu" if !$notifyEmail;
 
-ApiCommonData::Load::TuningConfig::Log::mailLog($notifyEmail, $instance);
+TuningManager::TuningManager::Log::mailLog($notifyEmail, $instance);
 
-ApiCommonData::Load::TuningConfig::Log::mailOutOfSpaceReport($instance, $dbaEmail, $fromEmail)
-  if ApiCommonData::Load::TuningConfig::Log::getOutOfSpaceMessage();
+TuningManager::TuningManager::Log::mailOutOfSpaceReport($instance, $dbaEmail, $fromEmail)
+  if TuningManager::TuningManager::Log::getOutOfSpaceMessage();
 
-die if ApiCommonData::Load::TuningConfig::Log::getErrorsEncounteredFlag();
+die if TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
 
 ###############################################################################
 
 sub usage {
-  ApiCommonData::Load::TuningConfig::Log::addLog(
+  TuningManager::TuningManager::Log::addLog(
 q{
 Create/update "tuning tables", denormalized copies of data for better web site performance.
 
@@ -450,8 +435,8 @@ sub getConfigFileName {
     $subversionDir = "/tmp/tMan." . $$ . "." . time . "/";
     my $subversionUrl = $tuningRegistry->getSubversionUrl();
     my @cmdLine = ("svn", "checkout", $subversionUrl, $subversionDir);
-    ApiCommonData::Load::TuningConfig::Log::addLogBanner("Checking out configuration file from Subversion");
-    ApiCommonData::Load::TuningConfig::Log::addLog("Subversion URL: \"$subversionUrl\"");
+    TuningManager::TuningManager::Log::addLogBanner("Checking out configuration file from Subversion");
+    TuningManager::TuningManager::Log::addLog("Subversion URL: \"$subversionUrl\"");
     system(@cmdLine) == 0
       or die "system @cmdLine failed: $?";
   }
@@ -509,11 +494,11 @@ where ott.timestamp < sysdate - $cleanupAge
   and lower(ott.name) not in
         (select lower(table_owner || '.' || table_name) from all_synonyms)
 SQL
-  ApiCommonData::Load::TuningConfig::Log::addLog($sql) if $debug;
+  TuningManager::TuningManager::Log::addLog($sql) if $debug;
 
   my $select = $dbh->prepare($sql);
   $select->execute()
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
   # prepare sql to delete ObsoleteTuningTable record when OTT is dropped
   my $sql = <<SQL;
@@ -533,13 +518,13 @@ SQL
 SQL
       my $drop = $dbh->prepare($sql);
       $drop->execute()
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
       $drop->finish();
 
       $delete->execute($dropee)
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     }
-    ApiCommonData::Load::TuningConfig::Log::addLog($dropMsg);
+    TuningManager::TuningManager::Log::addLog($dropMsg);
   }
   $select->finish();
   $delete->finish();
@@ -551,8 +536,8 @@ SQL
   # organism's tuning manager from running at the same time.) If $prefix isn't
   # defined (i.e. we aren't in a workflow), issue a warning.
   my $newTablesTerm = '';
-  if (ApiCommonData::Load::TuningConfig::TableSuffix::suffixDefined()) {
-    my $suffix = ApiCommonData::Load::TuningConfig::TableSuffix::getSuffix($dbh);
+  if (TuningManager::TuningManager::TableSuffix::suffixDefined()) {
+    my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh);
     $newTablesTerm = "and atab.table_name not like '%$suffix%'";
   }
   # note that the backslash in the regex is to protect the dollar-sign from Perl
@@ -571,14 +556,14 @@ SQL
 
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   while (my ($table) = $stmt->fetchrow_array()) {
     if ($prefix) {
-      ApiCommonData::Load::TuningConfig::Log::addLog("Dropping obsolete tuning table $table, which is not listed in apidb.ObsoleteTuningTable.");
+      TuningManager::TuningManager::Log::addLog("Dropping obsolete tuning table $table, which is not listed in apidb.ObsoleteTuningTable.");
       $dbh->do("drop table $table")
-	or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     } else {
-      ApiCommonData::Load::TuningConfig::Log::addLog("WARNING: Obsolete tuning table $table is not listed in apidb.ObsoleteTuningTable. . . consider dropping it");
+      TuningManager::TuningManager::Log::addLog("WARNING: Obsolete tuning table $table is not listed in apidb.ObsoleteTuningTable. . . consider dropping it");
     }
   }
 
@@ -596,23 +581,23 @@ SQL
 
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   while (my ($table) = $stmt->fetchrow_array()) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("tuning table $table is listed in apidb.ObsoleteTuningTable but does not exist");
+    TuningManager::TuningManager::Log::addErrorLog("tuning table $table is listed in apidb.ObsoleteTuningTable but does not exist");
   }
   $stmt->finish();
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("$cleanupCount obsolete tables found")
+  TuningManager::TuningManager::Log::addLog("$cleanupCount obsolete tables found")
       if $cleanupCount;
 
-  ApiCommonData::Load::TuningConfig::Log::addLog("*** NOTE: obsolete tables retained because --cleanupWarnOnly parameter is set ***")
+  TuningManager::TuningManager::Log::addLog("*** NOTE: obsolete tables retained because --cleanupWarnOnly parameter is set ***")
       if $cleanupCount && $cleanupWarnOnly;
 }
 
 sub lockForUpdate {
   my ($forceUpdate) = @_;
 
-  my $processInfo  = ApiCommonData::Load::TuningConfig::Log::getProcessInfo();
+  my $processInfo  = TuningManager::TuningManager::Log::getProcessInfo();
 
   my $sql = <<SQL;
     update apidb.InstanceMetaInfo
@@ -623,7 +608,7 @@ SQL
     unless $forceUpdate;
 
   $dbh->do($sql)
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
   my $stmt = $dbh->prepare("select current_updater from apidb.InstanceMetaInfo");
   $stmt->execute();
@@ -634,7 +619,7 @@ SQL
 Another tuningManager process appears to be updating the database. CURRENT_UPDATER is set to "$updater".
 Continuing in read-only mode, but not updating tuning tables. If this process ($updater) is not running, you can override this lockout by rerunning tuningManager with the "--forceUpdate" option.
 MSG
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog($updateLockoutMsg);
+    TuningManager::TuningManager::Log::addErrorLog($updateLockoutMsg);
     return("fail");
   }
   $stmt->finish();
@@ -643,9 +628,9 @@ MSG
 sub releaseLockForUpdate {
 
   $dbh->do("update apidb.InstanceMetaInfo set current_updater = null, update_start = null where current_updater = '"
-	   . ApiCommonData::Load::TuningConfig::Log::getProcessInfo()
+	   . TuningManager::TuningManager::Log::getProcessInfo()
 	   . "'")
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 }
 
 sub clearDeadLock {
@@ -657,7 +642,7 @@ sub clearDeadLock {
   return if !$updater;
 
   if (!($updater =~ /process \d* on \S*/)) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("ERROR: parsing current_updater string: \"" . $updater . "\"");
+    TuningManager::TuningManager::Log::addErrorLog("ERROR: parsing current_updater string: \"" . $updater . "\"");
     return;
   }
 
@@ -668,7 +653,7 @@ sub clearDeadLock {
   chomp($current_server);
 
   if ($current_server ne $server) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("can't check for tM process; it's on \"$server\" and I'm on \"$current_server\"");
+    TuningManager::TuningManager::Log::addErrorLog("can't check for tM process; it's on \"$server\" and I'm on \"$current_server\"");
     return;
   }
 
@@ -676,9 +661,9 @@ sub clearDeadLock {
   chomp($pid_test);
   if (!$pid_test) {
     # named process no longer exists; null out CURRENT_UPDATER
-    ApiCommonData::Load::TuningConfig::Log::addLog("CURRENT_UPDATER process (" . $updater . ") no longer exists; updating InstanceMetaInfo.");
+    TuningManager::TuningManager::Log::addLog("CURRENT_UPDATER process (" . $updater . ") no longer exists; updating InstanceMetaInfo.");
     $dbh->do("update apidb.InstanceMetaInfo set current_updater = null, update_start = null")
-    or ApiCommonData::Load::TuningConfig::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   }
 
   return;
@@ -707,7 +692,7 @@ SQL
     if ($wait < $maxWait) {
       my $dateString = `date`;
       chomp($dateString);
-      ApiCommonData::Load::TuningConfig::Log::addLog("Waiting for another tuning manager at $dateString");
+      TuningManager::TuningManager::Log::addLog("Waiting for another tuning manager at $dateString");
       sleep (300);
     }
   }
@@ -732,7 +717,7 @@ SQL
 
   $stmt->execute();
   while (my ($index) = $stmt->fetchrow_array()) {
-    ApiCommonData::Load::TuningConfig::Log::addErrorLog("index \"$index\" is unusable");
+    TuningManager::TuningManager::Log::addErrorLog("index \"$index\" is unusable");
   }
   $stmt->finish();
 }
