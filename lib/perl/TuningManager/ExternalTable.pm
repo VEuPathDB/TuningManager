@@ -13,11 +13,12 @@ my $currentDate;
 
 sub new {
     my ($class,
-	$name,         # name of database table
-        $dblink,       # dblink (if any) needed to access table
-        $dbh,          # database handle
-        $doUpdate,     # are we updating, not just checking, the db?
-        $dblinkSuffix) # suffix (such as "build") which must be appended to dblink
+	$name,               # name of database table
+        $dblink,             # dblink (if any) needed to access table
+        $dbh,                # database handle
+        $doUpdate,           # are we updating, not just checking, the db?
+        $housekeepingSchema, # where do my overhead tables live?
+       )
 	= @_;
 
     my $self = {};
@@ -25,9 +26,10 @@ sub new {
     bless($self, $class);
     $self->{name} = $name;
     $self->{dbh} = $dbh;
+    $self->{housekeepingSchema} = $housekeepingSchema;
 
     if ($dblink) {
-      $dblink = '@' . $dblink . $dblinkSuffix;
+      $dblink = '@' . $dblink;
     }
     $self->{dblink} = $dblink;
 
@@ -85,10 +87,11 @@ SQL
     $stmt->finish();
 
     # get stored ExternalDependency info for this table
+    my $housekeepingSchema = $self->{housekeepingSchema};
     $sql = <<SQL;
        select to_char(max_mod_date, 'yyyy-mm-dd hh24:mi:ss'), row_count,
               to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss')
-       from apidb.TuningMgrExternalDependency$dblink
+       from $housekeepingSchema.TuningMgrExternalDependency$dblink
        where name = upper('$self->{name}')
 SQL
     my $stmt = $dbh->prepare($sql)
@@ -124,7 +127,7 @@ SQL
 	# ExternalDependency record exists; update it
 	TuningManager::TuningManager::Log::addLog("    Stored timestamp ($timestamp) no longer valid for $self->{name}");
 	$sql = <<SQL;
-        update apidb.TuningMgrExternalDependency$dblink
+        update $housekeepingSchema.TuningMgrExternalDependency$dblink
         set (max_mod_date, timestamp, row_count) =
           (select to_date('$max_mod_date', 'yyyy-mm-dd hh24:mi:ss'), sysdate, $row_count
 	  from dual)
@@ -134,7 +137,7 @@ SQL
 	# no ExternalDependency record; insert one
 	TuningManager::TuningManager::Log::addLog("    No stored timestamp found for $self->{name}");
 	$sql = <<SQL;
-        insert into apidb.TuningMgrExternalDependency$dblink
+        insert into $housekeepingSchema.TuningMgrExternalDependency$dblink
                     (name, max_mod_date, timestamp, row_count)
         select upper('$self->{name}'), to_date('$max_mod_date', 'yyyy-mm-dd hh24:mi:ss'), sysdate, $row_count
 	from dual

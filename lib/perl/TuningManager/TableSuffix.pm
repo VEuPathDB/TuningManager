@@ -12,12 +12,12 @@ BEGIN {
 
   sub getSuffix {
 
-    my ($dbh) = @_;
+    my ($dbh, $housekeepingSchema) = @_;
 
     if (!defined $suffix) {
 
       my $sql = <<SQL;
-       select apidb.TuningManager_sq.nextval from dual
+       select $housekeepingSchema.TuningManager_sq.nextval from dual
 SQL
 
       my $stmt = $dbh->prepare($sql);

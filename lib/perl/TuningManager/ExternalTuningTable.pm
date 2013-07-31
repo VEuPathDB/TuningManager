@@ -10,8 +10,9 @@ sub new {
 	$name,      # name of database table
         $dblink,
         $dbh,       # database handle
-        $doUpdate,     # are we updating, not just checking, the db?
-        $dblinkSuffix) # suffix (such as "build") which must be appended to dblink
+        $doUpdate,  # are we updating, not just checking, the db?
+        $housekeepingSchema,
+       )
 	= @_;
 
     my $self = {};
@@ -21,14 +22,14 @@ sub new {
     $self->{dbh} = $dbh;
 
     if ($dblink) {
-      $dblink = '@' . $dblink . $dblinkSuffix;
+      $dblink = '@' . $dblink;
     }
     $self->{dblink} = $dblink;
 
     # get the timestamp
     my $sql = <<SQL;
        select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss')
-       from apidb.TuningTable$dblink
+       from $housekeepingSchema.TuningTable$dblink
        where lower(name) = lower('$self->{name}')
 SQL
     my $stmt = $dbh->prepare($sql);

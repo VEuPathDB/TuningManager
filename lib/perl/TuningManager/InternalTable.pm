@@ -13,9 +13,9 @@ my $maxRebuildMinutes;
 sub new {
     my ($class, $name, $internalDependencyNames, $externalDependencyNames,
         $externalTuningTableDependencyNames, $intermediateTables, $ancillaryTables, $sqls,
-        $perls, $unionizations, $programs, $dbh, $debug, $dblinkSuffix,
+        $perls, $unionizations, $programs, $dbh, $debug,
         $alwaysUpdate, $prefixEnabled, $maxRebuildMinutesParam, $instance, $propfile, $schema,
-        $password, $subversionDir, $dblink)
+        $password, $subversionDir, $dblink, $housekeepingSchema, $logTableName)
 	= @_;
 
     my $self = {};
@@ -35,7 +35,6 @@ sub new {
     $self->{programs} = $programs;
     $self->{debug} = $debug;
     $self->{dblink} = $dblink;
-    $self->{dblinkSuffix} = $dblinkSuffix;
     $self->{internalDependencies} = [];
     $self->{externalDependencies} = [];
     $self->{externalTuningTableDependencies} = [];
@@ -46,6 +45,8 @@ sub new {
     $self->{propfile} = $propfile;
     $self->{password} = $password;
     $self->{subversionDir} = $subversionDir;
+    $self->{housekeepingSchema} = $housekeepingSchema;
+    $self->{logTableName} = $logTableName;
 
     if ($name =~ /\./) {
       $self->{qualifiedName} = $name;
@@ -56,7 +57,7 @@ sub new {
     # get timestamp and definition from database
     my $sql = <<SQL;
        select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp, definition
-       from apidb.TuningTable
+       from $housekeepingSchema.TuningTable
        where lower(name) = lower('$self->{qualifiedName}')
 SQL
 
@@ -138,7 +139,7 @@ sub getTimestamp {
 }
 
 sub getState {
-  my ($self, $doUpdate, $dbh, $purgeObsoletes, $registry, $prefix, $filterValue) = @_;
+  my ($self, $doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue) = @_;
 
   return $self->{state} if defined $self->{state};
 
@@ -146,7 +147,7 @@ sub getState {
 
   my $needUpdate;
   my $broken;
-  my $tableStatus; # to store in apidb.TuningTable
+  my $tableStatus; # to store in TuningTable
 
   # check if the definition is different (or none is stored)
   if (!$self->{dbDef}) {
@@ -167,7 +168,7 @@ sub getState {
 
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
-    my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $registry, $prefix, $filterValue);
+    my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue);
     TuningManager::TuningManager::Log::decreaseIndent();
 
     if ($childState eq "neededUpdate" || $dependency->getTimestamp() gt $self->getTimestamp()) {
@@ -223,7 +224,7 @@ SQL
       TuningManager::TuningManager::Log::addErrorLog("attempt to update tuning table " . $self->{name} . ", which does not have the prefixEnabled attribute");
       $broken = 1;
     } else {
-      my $updateResult = $self->update($dbh, $purgeObsoletes, $registry, $prefix, $filterValue);
+      my $updateResult = $self->update($dbh, $purgeObsoletes, $prefix, $filterValue);
       if ($updateResult eq "broken") {
 	$broken = 1;
 	$tableStatus = "update failed";
@@ -252,14 +253,14 @@ SQL
 }
 
 sub update {
-  my ($self, $dbh, $purgeObsoletes, $registry, $prefix, $filterValue) = @_;
+  my ($self, $dbh, $purgeObsoletes, $prefix, $filterValue) = @_;
 
   my $startTime = time;
 
   TuningManager::TuningManager::Log::setUpdatePerformedFlag()
       unless $self->{alwaysUpdate};
 
-  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh);
+  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh, , $self->{housekeepingSchema} );
 
   my $dateString = `date`;
   chomp($dateString);
@@ -288,10 +289,6 @@ sub update {
     last if $updateError;
 
     my $sqlCopy = $sql;
-
-    # change, for example, "@toxo" to "@toxobuild"
-    my $dblinkSuffix = $self->{dblinkSuffix};
-    $sqlCopy =~ s/@(\w*)\b/\@$1$dblinkSuffix/g;
 
     # use numeric suffix to make db object names unique
     $sqlCopy =~ s/&1/$suffix/g;
@@ -350,8 +347,6 @@ sub update {
                       . " -propfile '" . $self->{propfile} . "'"
                       . " -password '" . $self->{password} . "'"
                       . " -schema '" . $self->{schema} . "'"
-                      . " -branch '" . $registry->getSubversionBranch() . "'"
-                      . " -subversionDir '" . $self->{subversionDir} . "'"
                       . " -suffix '" . $suffix . "'"
                       . " -prefix '" . $prefix . "'"
                       . " -dblink '" . $self->{dblink} . "'"
@@ -406,7 +401,8 @@ sub update {
       if ($buildDuration > $maxRebuildMinutes * 60)
   }
 
-  TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration, $registry->getInstanceName(), $registry->getDblink(), $recordCount)
+  TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration,
+                 $self->{instance}, $recordCount, $self->{logTableName}, $self->{housekeepingSchema})
       if !$prefix;
 
   return "neededUpdate"
@@ -430,8 +426,10 @@ SQL
 sub storeDefinition {
   my ($self, $dbh) = @_;
 
+  my $housekeepingSchema = $self->{housekeepingSchema};
+
   my $sql = <<SQL;
-       delete from apidb.TuningTable
+       delete from $housekeepingSchema.TuningTable
        where lower(name) = lower('$self->{qualifiedName}')
 SQL
 
@@ -441,7 +439,7 @@ SQL
   $stmt->finish();
 
   my $sql = <<SQL;
-       insert into apidb.TuningTable
+       insert into $housekeepingSchema.TuningTable
           (name, timestamp, definition, status, last_check)
           values (?, sysdate, ?, 'up-to-date', sysdate)
 SQL
@@ -561,6 +559,7 @@ SQL
 
 sub publish {
   my ($self, $tuningTableName, $suffix, $dbh, $purgeObsoletes, $prefix) = @_;
+  my $housekeepingSchema = $self->{housekeepingSchema};
 
   # grant select privilege on new table
     my $sql = <<SQL;
@@ -600,7 +599,7 @@ SQL
   } else {
     # . . . or just mark it obsolete
     my $sql = <<SQL;
-      insert into apidb.ObsoleteTuningTable (name, timestamp)
+      insert into $housekeepingSchema.ObsoleteTuningTable (name, timestamp)
       select table_owner || '.' || table_name, sysdate
       from all_synonyms
       where owner = sys_context ('USERENV', 'CURRENT_SCHEMA')
@@ -699,13 +698,12 @@ sub getColumnInfo {
     my $sourceNumber;
     my @froms;
 
-  my $dblinkSuffix = $self->{dblinkSuffix};
     foreach my $source (@{$union->{source}}) {
 
       $sourceNumber++;
 
       my $dblink = $source->{dblink};
-      $dblink = "@" . $dblink . $dblinkSuffix
+      $dblink = "@" . $dblink
 	if $dblink;
       my $table = $source->{name};
 
@@ -715,8 +713,6 @@ sub getColumnInfo {
 	my $queryString = $source->{query}[0];
 	$tempTable = $self->{schema} . "." . 'UnionizerTemp';
 	$table = $tempTable;
-	# do dblink-suffix transformation on $queryString
-	$queryString =~ s/@(\w*)\b/\@$1$dblinkSuffix/g;
 	runSql($dbh, 'create table ' . $tempTable . ' as ' . $queryString, 1);
 	$froms[$sourceNumber] = '(' . $queryString . ')';
       } else {
@@ -783,9 +779,10 @@ sub runSql {
 
 sub setStatus {
   my ($self, $dbh, $status) = @_;
+  my $housekeepingSchema = $self->{housekeepingSchema};
 
   my $sql = <<SQL;
-       update apidb.TuningTable
+       update $housekeepingSchema.TuningTable
        set status = ?,
            check_os_user = ?,
            last_check = sysdate

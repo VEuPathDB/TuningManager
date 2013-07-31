@@ -187,13 +187,13 @@ sub getProcessInfo {
 }
 
 sub logRebuild {
-  my ($dbh, $name, $buildDuration, $instanceName, $dblink, $recordCount) = @_;
+  my ($dbh, $name, $buildDuration, $instanceName, $recordCount, $logTableName, $housekeepingSchema) = @_;
 
-  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh);
+  my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh, $housekeepingSchema);
   my $updater = getProcessInfo();
 
   $dbh->do(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
-insert into apidb_r.TuningTableLog\@$dblink
+insert into $logTableName
 (instance_nickname, name, suffix, updater, timestamp, row_count, build_duration)
 select '$instanceName', '$name', '$suffix', '$updater', sysdate, '$recordCount', '$buildDuration'
 from dual

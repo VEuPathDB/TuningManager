@@ -105,8 +105,7 @@ if ($propFile) {
 }
 
   $password = $props->{password} if !$password;
-  $username = $props->{schema} if !$username;
-  $username = 'ApidbTuning' if !$username;
+  $username = $props->{tuningSchema} if !$username;
 
   return ($instance, $username, $password);
 }
@@ -114,7 +113,6 @@ if ($propFile) {
 sub getDbHandle {
   my ($instance, $username, $password) = @_;
   my $props;
-
 
   my $dsn = "dbi:Oracle:" . $instance;
   my $dbh = DBI->connect(

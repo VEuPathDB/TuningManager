@@ -5,8 +5,8 @@
     <program commandLine="buildAnnotationChangeTT"/>
   </tuningTable -->
 
-  <tuningTable name="HelloWorld">
-    <internalDependency name="AnnotationChange"/>
+  <tuningTable name="HelloWorld" alwaysUpdate="true">
+    <!-- internalDependency name="AnnotationChange"/ -->
 
     <sql>
       <![CDATA[
