@@ -630,7 +630,7 @@ SQL
   }
 
   # Run stored procedure to analye new table
-  $dbh->do("BEGIN apidb.analyze('" . $self->{schema} . "', '$prefix$table$suffix'); END;")
+  $dbh->do("BEGIN dbms_stats.gather_table_stats( ownname=> '" . $self->{schema} . "', tabname=> '$prefix$table$suffix', estimate_percent=> DBMS_STATS.AUTO_SAMPLE_SIZE, cascade=> DBMS_STATS.AUTO_CASCADE, degree=> null, no_invalidate=> DBMS_STATS.AUTO_INVALIDATE, granularity=> 'AUTO', method_opt=> 'FOR ALL COLUMNS SIZE AUTO'); END;")
     or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
 
   return $synonymRtn
