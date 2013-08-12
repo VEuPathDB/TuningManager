@@ -117,9 +117,14 @@ eval {
   TuningManager::TuningManager::Log::addLog("Logging in to the database as (and creating tuning tables in) the schema \"$schema\".");
   $dbh = TuningManager::TuningManager::Utils::getDbHandle($instance, $schema, $password);
 
+  # check that the XML validation program is installed and runnable
+  my $validationProgram = "validateXmlWithRng";
+  TuningManager::TuningManager::Log::addErrorLog("failed to run XML validation program \"$validationProgram\"")
+      unless `which $validationProgram`;
+
   # validate config file
   TuningManager::TuningManager::Log::addLog("Using config file \"$configFile\"");
-  my $validationCmd = "validateXmlWithRng $ENV{GUS_HOME}/lib/rng/tuningManager.rng $configFile |";
+  my $validationCmd = "$validationProgram $ENV{GUS_HOME}/lib/rng/tuningManager.rng $configFile |";
   TuningManager::TuningManager::Log::addLog("Validating XML:\n" . $validationCmd);
   open(PROGRAM, $validationCmd);
   while (<PROGRAM>) {
