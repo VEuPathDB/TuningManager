@@ -4,6 +4,13 @@
   <!-- oooooooooooooooooooooooooo  Dependencies  oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
+  <target name="FgpUtil-Installation">
+    <ant antfile="../FgpUtil/build.xml" target="FgpUtil-Installation">
+      <property name="project" value="FgpUtil"/>
+      <property name="version" value=""/>
+    </ant>
+  </target>  
+
   
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooo    Checkout    oooooooooooooooooooooooooo -->
@@ -23,7 +30,7 @@
   <!-- oooooooooooooooooooooooooo  Installation  oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
-  <target name="TuningManager-Installation" depends="">
+  <target name="TuningManager-Installation" depends="FgpUtil-Installation">
     <ant target="defaultComponentInstall">
         <property name="project" value="TuningManager"/>
         <property name="component" value=""/>
