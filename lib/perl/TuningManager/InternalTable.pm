@@ -345,11 +345,9 @@ sub update {
     my $commandLine = $program->{commandLine}
                       . " -instance '" . $self->{instance} . "'"
                       . " -propfile '" . $self->{propfile} . "'"
-                      . " -password '" . $self->{password} . "'"
                       . " -schema '" . $self->{schema} . "'"
                       . " -suffix '" . $suffix . "'"
                       . " -prefix '" . $prefix . "'"
-                      . " -dblink '" . $self->{dblink} . "'"
                       . $debug
                       . " 2>&1 ";
 
@@ -563,7 +561,7 @@ sub publish {
 
   # grant select privilege on new table
     my $sql = <<SQL;
-      grant select on $prefix$tuningTableName$suffix to gus_r
+      grant select on $prefix$tuningTableName$suffix to public
 SQL
 
   my $stmt = $dbh->prepare($sql);
