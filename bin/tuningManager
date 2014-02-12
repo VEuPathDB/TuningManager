@@ -84,7 +84,7 @@ eval {
                                dbaEmail => 1,
                                fromEmail => 1,
                                dblink => 1,
-                               tuningSchema => 1,
+                               schema => 1,
                                housekeepingSchema => 1,
                                logTable => 1,
                               );
@@ -99,7 +99,7 @@ eval {
   }
 
   # prefer schema from command line, then prop file, then hardwired default
-  $schema = $props->{tuningSchema} if !$schema;
+  $schema = $props->{schema} if !$schema;
   $schema = 'TuningManager' if !$schema;
 
   $maxRebuildMinutes = $props->{maxRebuildMinutes};
