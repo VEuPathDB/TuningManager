@@ -7,11 +7,11 @@ use TuningManager::TuningManager::Log;
 
 sub new {
     my ($class,
-	$name,      # name of database table
+	$name,               # name of database table
         $dblink,
-        $dbh,       # database handle
-        $doUpdate,  # are we updating, not just checking, the db?
-        $housekeepingSchema,
+        $dbh,                # database handle
+        $doUpdate,           # are we updating, not just checking, the db?
+        $housekeepingSchema, # schema for tables such as TuningTable
        )
 	= @_;
 
@@ -20,6 +20,7 @@ sub new {
     bless($self, $class);
     $self->{name} = $name;
     $self->{dbh} = $dbh;
+    $self->{housekeepingSchema} = $housekeepingSchema;
 
     if ($dblink) {
       $dblink = '@' . $dblink;

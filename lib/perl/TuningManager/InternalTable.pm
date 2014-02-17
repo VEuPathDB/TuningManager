@@ -347,7 +347,6 @@ sub update {
                       . " -propfile '" . $self->{propfile} . "'"
                       . " -schema '" . $self->{schema} . "'"
                       . " -suffix '" . $suffix . "'"
-                      . " -prefix '" . $prefix . "'"
                       . $debug
                       . " 2>&1 ";
 
