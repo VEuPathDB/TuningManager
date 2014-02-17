@@ -95,6 +95,19 @@ eval {
 	$badProp = 1;
       }
     }
+
+    my @requiredProperties = ('password',
+                              'fromEmail',
+                              'housekeepingSchema',
+                              'logTable',
+                              );
+    foreach my $requiredProp (@requiredProperties) {
+      if (!($props->{$requiredProp})) {
+	TuningManager::TuningManager::Log::addErrorLog("required property \"$requiredProp\" not found");
+	$badProp = 1;
+      }
+    }
+
     die if $badProp;
   }
 
@@ -215,7 +228,7 @@ eval {
 	my $key = $dependency->{name} . '@' . $dependency->{dblink};
 	$externalTuningTables{$key}
 	  = TuningManager::TuningManager::ExternalTuningTable->
-	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate)
+	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate, $housekeepingSchema)
 	      unless ($externalTuningTables{$key});
 
 	# add externalTuning-table object to list of externalTuning dependencies
