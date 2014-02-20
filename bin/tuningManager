@@ -255,6 +255,9 @@ eval {
     TuningManager::TuningManager::Log::addLog("Configuration file OK");
   }
 
+  die "graph of tuning-table dependencies must be acyclic"
+    if ($dependencyCycle);
+
   # indexes
   TuningManager::TuningManager::Log::addLogBanner("Checking indexes");
   my $indexesConfigured;
