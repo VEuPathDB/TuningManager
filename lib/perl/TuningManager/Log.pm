@@ -161,7 +161,8 @@ sub mailLog {
   if (!getUpdateNeededFlag() && !getErrorsEncounteredFlag()) {
     $subject .= 'ok';
   } elsif (getUpdateNeededFlag() && !getUpdatePerformedFlag()) {
-    $subject .= 'NEEDS UPDATE';
+#    $subject .= 'NEEDS UPDATE';
+    $subject .= 'OK';
   } elsif (getUpdatePerformedFlag()) {
     $subject .= "updated";
   }
