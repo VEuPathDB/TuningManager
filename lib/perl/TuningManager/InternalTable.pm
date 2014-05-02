@@ -622,8 +622,15 @@ SQL
   # drop obsolete table, if we're doing that (and it exists)
   if (defined $synonymRtn && $purgeObsoletes && $oldTable) {
     TuningManager::TuningManager::Log::addLog("    purging obsolete table " . $oldTable);
-    $dbh->do("drop table " . $oldTable)
-      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    if (!$dbh->do("drop table " . $oldTable)) {
+      my $message;
+      if ($dbh->errstr =~ /ORA-02449/) {
+	$message = "\n" . $dbh->errstr . "\n\nNOTE: to avoid this error, all foreign-key constraints should be dropped on tuning tables once they are loaded, BEFORE they are put live.\n";
+      } else {
+	$message = "\n" . $dbh->errstr . "\n";
+      }
+      TuningManager::TuningManager::Log::addErrorLog($message);
+    }
   }
 
   # Run stored procedure to analye new table
