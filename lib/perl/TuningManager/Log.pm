@@ -215,7 +215,7 @@ sub mailOutOfSpaceReport {
 
   TuningManager::TuningManager::Log::addLog("Sending out-of-space notification to \"$dbaEmail\" with subject \"$subject\"");
 
-  open(MAIL, "|mail -s '$subject' $dbaEmail  -- -r $fromEmail");
+  open(MAIL, "|mail -s '$subject' -r $fromEmail $dbaEmail");
 
   print MAIL <<EMAIL;
 Dear DBAs,
