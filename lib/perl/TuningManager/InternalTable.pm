@@ -314,7 +314,7 @@ sub update {
     $updateError = 1 if !TuningManager::TuningManager::Utils::sqlBugWorkaroundDo($dbh, $sqlCopy);;
 
     if ($dbh->errstr =~ /ORA-01652/) {
-    TuningManager::TuningManager::Log::addLog("Setting out-of-space flag, so notification email is sent.");
+      TuningManager::TuningManager::Log::addLog("Setting out-of-space flag, so notification email is sent.");
       TuningManager::TuningManager::Log::setOutOfSpaceMessage($dbh->errstr);
     }
 
