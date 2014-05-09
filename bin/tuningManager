@@ -521,20 +521,26 @@ SQL
   # schema that have names like a current tuning table, but with a lower numeric
   # suffix that don't have a synonym pointed at them and aren't listed in ObsolateTuningTable.
   $sql = <<SQL;
-     select tables.table_name
-     from (select synonym_name, table_name, length(synonym_name) as synonym_length
-           from user_synonyms
-           where table_owner = sys_context( 'userenv', 'current_schema' )) synonyms,
-          (select table_name
-           from user_tables
-           minus select table_name
-           from user_synonyms
-           where table_owner = sys_context( 'userenv', 'current_schema' )
-           minus select replace(name, sys_context( 'userenv', 'current_schema' ), '')
-           from apidb.ObsoleteTuningTable) tables
-     where substr(tables.table_name, 1, synonym_length) = synonym_name
-       and to_number(substr(synonyms.table_name, length(synonym_name) + 1)) -- live suffix
-           > to_number(substr(tables.table_name, length(synonym_name) + 1)) -- table suffix
+     select table_name
+     from (select synonym_name, tables.table_name, synonym_length, live_suffix   
+           from (select synonym_name, table_name, length(synonym_name) as synonym_length,
+                 substr(table_name, length(synonym_name) + 1) as live_suffix
+                 from user_synonyms
+                 where table_owner = sys_context( 'userenv', 'current_schema' )
+                   and substr(table_name, 1, length(synonym_name)) = synonym_name) synonyms,
+                (select table_name
+                 from user_tables
+                 minus select table_name
+                 from user_synonyms
+                 where table_owner = sys_context( 'userenv', 'current_schema' )
+                 minus select replace(name, sys_context( 'userenv', 'current_schema' ), '')
+                 from apidb.ObsoleteTuningTable) tables
+           where length(tables.table_name) > synonym_length -- synonym shorter than table
+             and substr(tables.table_name, 1, synonym_length) = synonym_name -- names match up to syn length
+             and nvl(regexp_replace(substr(tables.table_name, synonym_length + 1), '[0-9]*', ''), '0') = '0'
+          )
+      -- only delete table with suffix less than that of the live table
+     where live_suffix > to_number(substr(table_name, length(synonym_name) + 1))
 SQL
 
   my $stmt = $dbh->prepare($sql);
