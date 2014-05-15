@@ -34,7 +34,7 @@ BEGIN {
 
     my $dateString = `date '+%Y/%m/%d %H:%M:%S'`;
     chomp ($dateString);
-    $message =~ s/\n/\n$dateString| $indentString/;
+    $message =~ s/\n/\n$dateString| $indentString/g;
     $message = "$dateString| $indentString$message";
 
     $| = 1;
