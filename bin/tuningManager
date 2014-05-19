@@ -533,7 +533,7 @@ SQL
                  minus select table_name
                  from user_synonyms
                  where table_owner = sys_context( 'userenv', 'current_schema' )
-                 minus select replace(name, sys_context( 'userenv', 'current_schema' ), '')
+                 minus select replace(name, sys_context( 'userenv', 'current_schema' ) || '.', '')
                  from apidb.ObsoleteTuningTable) tables
            where length(tables.table_name) > synonym_length -- synonym shorter than table
              and substr(tables.table_name, 1, synonym_length) = synonym_name -- names match up to syn length
