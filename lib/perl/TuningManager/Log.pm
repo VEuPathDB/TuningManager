@@ -156,15 +156,10 @@ sub addLogBanner {
 sub mailLog {
   my ($recipientList, $instance_name) = @_;
 
-  my $subject = "$instance_name - ";
+  my $subject = "$instance_name";
 
-  if (!getUpdateNeededFlag() && !getErrorsEncounteredFlag()) {
-    $subject .= 'ok';
-  } elsif (getUpdateNeededFlag() && !getUpdatePerformedFlag()) {
-    $subject .= 'NEEDS UPDATE';
-  } elsif (getUpdatePerformedFlag()) {
-    $subject .= "updated";
-  }
+  $subject .= " - updated"
+    if getUpdatePerformedFlag();
 
   $subject .= " - ERRORS"
     if getErrorsEncounteredFlag();
