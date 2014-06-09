@@ -378,7 +378,7 @@ sub updateInstance {
   my $tmpDir;
 
   my $tuningRegistry =
-    ApiCommonData::Load::TuningConfig::TuningRegistry->new($dbh, $dblink);
+    TuningManager::TuningManager::TuningRegistry->new($dbh, $dblink);
 
   my $svn = $tuningRegistry->getSubversionUrl();
   if ($svn =~ /ApiCommonData\/(.*)\/Load\/lib/) {
