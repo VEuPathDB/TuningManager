@@ -385,7 +385,10 @@ sub updateInstance {
     $svn = $1;
   }
 
-  die "\$svn undefined" unless $svn;
+  if (! $svn) {
+    print STDERR "for instance \"$instance\" getSubversionUrl() returns \"" . $tuningRegistry->getSubversionUrl() . "\"\n";
+    die "\$svn undefined";
+  }
 
   if ($currentEnv) {
     # use current GUS environment
