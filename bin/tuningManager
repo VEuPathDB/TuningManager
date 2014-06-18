@@ -10,7 +10,7 @@ use TuningManager::TuningManager::InternalTable;
 use TuningManager::TuningManager::ExternalTable;
 use TuningManager::TuningManager::ExternalTuningTable;
 use TuningManager::TuningManager::TuningIndex;
-use TuningManager::TuningManager::Log;
+use TuningManager::TuningManager::Log qw(addLog addErrorLog addLogPreamble);
 use TuningManager::TuningManager::TableSuffix;
 use TuningManager::TuningManager::Utils;
 
@@ -72,7 +72,7 @@ $cleanupAge = 0 if !defined $cleanupAge;
 
 $doUpdate = 1 if $forceUpdate;
 
-my ($dbh, $brokenCount, $neededUpdateCount);
+my $dbh;
 eval {
   if ($propFile) {
     my $simple = XML::Simple->new();
@@ -280,16 +280,13 @@ eval {
   }
 
   # tables
-  my $tableCount = 0;
-  $brokenCount = 0;
-  $neededUpdateCount = 0;
-  my $upToDateCount = 0;
-
   TuningManager::TuningManager::Log::addLogBanner("Checking whether tuning tables are up to date");
   # check (and potentially update) every tuning table
   my @tableList;
+  my $tableParamCount = 0;
   if ($tables) {
     @tableList = split(/,/, $tables);
+    $tableParamCount = scalar(@tableList);
   } else {
     @tableList = keys(%tuningTables);
   }
@@ -300,18 +297,7 @@ eval {
       next;
     }
 
-    $tableCount++;
     my $state = $tuningTables{$table}->getState($doUpdate, $dbh, !$cleanupAge, $prefix, $filterValue);
-
-    if ($state eq "broken") {
-      $brokenCount++;
-    } elsif ($state eq "neededUpdate") {
-      $neededUpdateCount++;
-    } elsif ($state eq "up-to-date") {
-      $upToDateCount++;
-    } else {
-      TuningManager::TuningManager::Log::addErrorLog("invalid state $state");
-    }
   }
 
   # cleanup
@@ -321,51 +307,7 @@ eval {
   &checkForUnusableIndexes;
 
   # summary
-  if (!$tableCount) {
-    TuningManager::TuningManager::Log::addLog("No tuningTable entities were defined in the config file");
-  } else {
-    my $summaryString = "\n$tableCount table(s) defined: $upToDateCount up-to-date, $neededUpdateCount "
-      . ($doUpdate ? "updated" : "needing update")
-	. ", $brokenCount broken";
-    $summaryString .= " -- tuningManager ran successfully"
-      if !TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
-    TuningManager::TuningManager::Log::addLogPreamble($summaryString);
-  }
-
-  # list broken tables
-  if ($brokenCount) {
-    TuningManager::TuningManager::Log::addLogPreamble("   broken table(s):");
-    foreach my $table (@tableList) {
-      TuningManager::TuningManager::Log::addLogPreamble("     " . $tuningTables{$table}->getName())
-	  if $tuningTables{$table}->getState($doUpdate, $dbh) eq "broken";
-    }
-  }
-
-
-  # list updated/outdated tables
-  if ($neededUpdateCount) {
-    if ($doUpdate) {
-      TuningManager::TuningManager::Log::addLogPreamble("   table(s) updated:");
-    } else {
-      TuningManager::TuningManager::Log::addLogPreamble("   table(s) needing update:");
-    }
-    foreach my $table (@tableList) {
-      TuningManager::TuningManager::Log::addLogPreamble("     " . $tuningTables{$table}->getName())
-	  if $tuningTables{$table}->getState($doUpdate, $dbh) eq "neededUpdate";
-    }
-  }
-
-  if (!$indexesConfigured) {
-    TuningManager::TuningManager::Log::addLogPreamble("No tuningIndex entities were defined in the config file");
-  } elsif ($missingIndexes) {
-    TuningManager::TuningManager::Log::addLogPreamble($missingIndexes . " of the "
-						   . $indexesConfigured
-						   . " indexes configured were found to be missing");
-  } else {
-    TuningManager::TuningManager::Log::addLogPreamble("All "
-						   . $indexesConfigured
-						   . " indexes were found to exist.");
-  }
+  logSummary(\%tuningTables, $tableParamCount, $doUpdate, $indexesConfigured, $missingIndexes);
 
   releaseLockForUpdate() if !$prefix;
 
@@ -498,8 +440,15 @@ SQL
           drop table $dropee
 SQL
       my $drop = $dbh->prepare($sql);
-      $drop->execute()
-	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      if (!$drop->execute()) {
+	my $message;
+	if ($dbh->errstr =~ /ORA-02449/) {
+	  $message = "\n" . $dbh->errstr . "\n\nNOTE: to avoid this error, all foreign-key constraints should be dropped on tuning tables once they are loaded, BEFORE they are put live.\n";
+	} else {
+	  $message = "\n" . $dbh->errstr . "\n";
+	}
+	TuningManager::TuningManager::Log::addErrorLog($message);
+      }
       $drop->finish();
 
       $delete->execute($dropee)
@@ -700,4 +649,98 @@ SQL
     TuningManager::TuningManager::Log::addErrorLog("index \"$index\" is unusable");
   }
   $stmt->finish();
+}
+
+sub logSummary {
+  my ($tuningTableRef, $tableParamCount, $doUpdate, $indexesConfigured, $missingIndexes) = @_;
+
+  my %tuningTables = %$tuningTableRef;
+
+  my $tableCount = 0;
+  my $brokenCount = 0;
+  my $neededUpdateCount = 0;
+  my $upToDateCount = 0;
+  my @brokenList;
+  my @neededUpdateList;
+
+  foreach my $table (keys(%tuningTables)) {
+    $tableCount++;
+    my $state = $tuningTables{$table}->{state};
+    if ($state eq "broken") {
+      $brokenCount++;
+      push(@brokenList, $table);
+    } elsif ($state eq "neededUpdate") {
+      $neededUpdateCount++;
+      push(@neededUpdateList, $table);
+    } elsif ($state eq "up-to-date") {
+      $upToDateCount++;
+    } elsif ($state) {
+      addErrorLog("unknown state \"$state\" for table \"$table\"");
+    }
+  }
+
+  if (!$tableCount) {
+    addLog("No tuningTable entities were defined in the config file");
+  } else {
+    addLogPreamble("\n");
+    addLogPreamble(sprintf("%4d ", $tableCount) . pluralize($tableCount, "table") . " defined in XML");
+    addLogPreamble(sprintf("%4d ", $tableParamCount) . pluralize($tableParamCount, "table")
+                   . " named on command line with -tables parameter")
+	if $tableParamCount;
+    addLogPreamble(sprintf("%4d ", $upToDateCount) . pluralize($upToDateCount, "table") . " up to date");
+    addLogPreamble(sprintf("%4d ", $neededUpdateCount) . pluralize($neededUpdateCount, "table")
+                   . ($doUpdate ? " updated" : " needing update"));
+    addLogPreamble(sprintf("%4d ", $brokenCount) . pluralize($brokenCount, "table") . " broken");
+    addLogPreamble(" -- tuningManager ran successfully")
+      if !TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
+    addLogPreamble(" "); # newline to make summary stand out
+
+    # list broken tables
+    if ($brokenCount) {
+      addLogPreamble("   broken " . pluralize($brokenCount, "table") . ":");
+      foreach my $table (@brokenList) {
+	addLogPreamble("     $table");
+      }
+      addLogPreamble(" ");
+    }
+
+    # list updated/outdated tables
+    if ($neededUpdateCount) {
+      addLogPreamble("   " . pluralize($neededUpdateCount, "table") . ($doUpdate ? " updated:" : " needing update:"));
+      foreach my $table (@neededUpdateList) {
+	addLogPreamble("     $table");
+      }
+      addLogPreamble(" ");
+    }
+  }
+
+  if (!$indexesConfigured) {
+    addLogPreamble("No tuningIndex entities were defined in the config file");
+  } elsif ($missingIndexes) {
+    addLogPreamble($missingIndexes . " of the "
+		   . $indexesConfigured
+		   . " indexes configured were found to be missing");
+  } else {
+    addLogPreamble("All "
+		   . $indexesConfigured
+		   . " indexes were found to exist.");
+  }
+}
+
+sub pluralize {
+
+  # return the name that goes with the given quantity.
+  # plural form defaults to singular + "s"
+
+  # Examples:
+  # pluralize (1, "table") returns "table"
+  # pluralize (2, "table") returns "tables"
+  # pluralize (2, "index", "indices") returns "indices"
+
+  my ($quantity, $name, $pluralName) = @_;
+
+  $pluralName = $name . "s"
+    unless $pluralName;
+
+  return ($quantity == 1) ? $name : $pluralName;
 }
