@@ -2,6 +2,9 @@ package TuningManager::TuningManager::Log;
 
 use TuningManager::TuningManager::TableSuffix;
 
+use Exporter qw(import);
+our @EXPORT_OK = qw(addLog addErrorLog addLogPreamble);
+
 BEGIN {
 
   # These variables are declared inside a BEGIN block.  This makes them behave

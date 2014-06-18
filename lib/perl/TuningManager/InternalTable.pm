@@ -2,6 +2,7 @@ package TuningManager::TuningManager::InternalTable;
 
 use TuningManager::TuningManager::TableSuffix;
 use TuningManager::TuningManager::Utils;
+use TuningManager::TuningManager::Log qw(addLog addErrorLog addLogPreamble);
 
 # @ISA = qw( TuningManager::TuningManager::Table );
 
@@ -54,19 +55,22 @@ sub new {
       $self->{qualifiedName} = $schema . "." . $name;
     }
 
-    # get timestamp and definition from database
+    # get timestamp, last_check, and definition from database
     my $sql = <<SQL;
-       select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp, definition
+       select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp,
+              to_char(last_check, 'yyyy-mm-dd hh24:mi:ss') as last_check,
+       definition
        from $housekeepingSchema.TuningTable
        where lower(name) = lower('$self->{qualifiedName}')
 SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
-      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
-    my ($timestamp, $dbDef) = $stmt->fetchrow_array();
+      or addErrorLog("\n" . $dbh->errstr . "\n");
+    my ($timestamp, $lastCheck, $dbDef) = $stmt->fetchrow_array();
     $stmt->finish();
     $self->{timestamp} = $timestamp;
+    $self->{lastCheck} = $lastCheck;
     $self->{dbDef} = $dbDef;
 
     return $self;
@@ -138,64 +142,73 @@ sub getTimestamp {
   return $self->{timestamp};
 }
 
+sub getLastCheck {
+  my ($self) = @_;
+
+  return $self->{lastCheck};
+}
+
 sub getState {
   my ($self, $doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue) = @_;
 
   return $self->{state} if defined $self->{state};
 
-  TuningManager::TuningManager::Log::addLog("checking $self->{name}");
+  addLog("checking $self->{name}");
 
   my $needUpdate;
   my $broken;
   my $tableStatus; # to store in TuningTable
+  my $storedDefinitionChange;
 
   # check if the definition is different (or none is stored)
   if (!$self->{dbDef}) {
-    TuningManager::TuningManager::Log::addLog("    no TuningTable record exists in database for $self->{name} -- update needed.");
+    addLog("    no TuningTable record exists in database for $self->{name} -- update needed.");
     $needUpdate = 1;
+    $storedDefinitionChange = 1;
   } elsif ($self->{dbDef} ne $self->getDefString()) {
-    TuningManager::TuningManager::Log::addLog("    stored TuningTable record (dated $self->{timestamp}) differs from current definition for $self->{name} -- update needed.");
+    addLog("    stored TuningTable record (checked $self->{lastCheck}) differs from current definition for $self->{name} -- update needed.");
     $needUpdate = 1;
-    TuningManager::TuningManager::Log::addLog("stored:\n-------\n" . $self->{dbDef} . "\n-------")
+    $storedDefinitionChange = 1;
+    addLog("stored:\n-------\n" . $self->{dbDef} . "\n-------")
 	if $self->{debug};
-    TuningManager::TuningManager::Log::addLog("current:\n-------\n" . $self->getDefString() . "\n-------")
+    addLog("current:\n-------\n" . $self->getDefString() . "\n-------")
 	if $self->{debug};
   }
 
   # check internal dependencies
   foreach my $dependency (@{$self->getInternalDependencies()}) {
-    TuningManager::TuningManager::Log::addLog("    depends on tuning table " . $dependency->getName());
+    addLog("    depends on tuning table " . $dependency->getName());
 
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
     my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue);
     TuningManager::TuningManager::Log::decreaseIndent();
 
-    if ($childState eq "neededUpdate" || $dependency->getTimestamp() gt $self->getTimestamp()) {
+    if ($childState eq "neededUpdate" || $dependency->getTimestamp() gt $self->getLastCheck()) {
       $needUpdate = 1;
-      TuningManager::TuningManager::Log::addLog("    $self->{name} needs update because it depends on " . $dependency->getName() . ", which was found to be out of date (or is simply newer).");
+      addLog("    $self->{name} needs update because it depends on " . $dependency->getName() . ", which was found to be out of date (or is simply newer).");
     } elsif ($childState eq "broken") {
       $broken = 1;
-      TuningManager::TuningManager::Log::addLog("    $self->{name} is broken because it depends on " . $dependency->getName() . ", which is broken.");
+      addLog("    $self->{name} is broken because it depends on " . $dependency->getName() . ", which is broken.");
     }
   }
 
   # check external dependencies
   foreach my $dependency (@{$self->getExternalDependencies()}) {
-    TuningManager::TuningManager::Log::addLog("    depends on external table " . $dependency->getName());
-    if ($dependency->getTimestamp() gt $self->{timestamp}) {
+    addLog("    depends on external table " . $dependency->getName());
+    if ($dependency->getTimestamp() gt $self->{lastCheck}) {
       $needUpdate = 1;
-      TuningManager::TuningManager::Log::addLog("    creation timestamp of $self->{name} ($self->{timestamp}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
+      addLog("    date of $self->{name} ($self->{lastCheck}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
     }
   }
 
   # check external tuning-table dependencies
   if ($self->getExternalTuningTableDependencies()) {
     foreach my $dependency (@{$self->getExternalTuningTableDependencies()}) {
-      TuningManager::TuningManager::Log::addLog("    depends on external tuning table " . $dependency->getName());
-      if ($dependency->getTimestamp() gt $self->{timestamp}) {
+      addLog("    depends on external tuning table " . $dependency->getName());
+      if ($dependency->getTimestamp() gt $self->{lastCheck}) {
 	$needUpdate = 1;
-	TuningManager::TuningManager::Log::addLog("    creation timestamp of $self->{name} ($self->{timestamp}) is older than creation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
+	addLog("    last check date of $self->{name} ($self->{lastCheck}) is older than creation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
       }
     }
   }
@@ -207,12 +220,13 @@ sub getState {
 SQL
   $dbh->{PrintError} = 1;
   if (!$stmt) {
-	TuningManager::TuningManager::Log::addLog("    query against $self->{name} failed -- update needed.");
-	$needUpdate = 1
+	addLog("    query against $self->{name} failed -- update needed.");
+	$needUpdate = 1;
   }
 
   if ($self->{alwaysUpdate}) {
-    TuningManager::TuningManager::Log::addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
+    addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
+    $needUpdate = 1;
   }
 
   $tableStatus = "up-to-date";
@@ -221,21 +235,24 @@ SQL
 
   if ( ($doUpdate and $needUpdate) or $self->{alwaysUpdate} or ($doUpdate and $prefix)) {
     if ($prefix && !$self->{prefixEnabled}) {
-      TuningManager::TuningManager::Log::addErrorLog("attempt to update tuning table " . $self->{name} . ", which does not have the prefixEnabled attribute");
+      addErrorLog("attempt to update tuning table " . $self->{name} . ". This table does not have the prefixEnabled attribute, but the tuning manager was run with the -prefix parameter set.");
       $broken = 1;
     } else {
-      my $updateResult = $self->update($dbh, $purgeObsoletes, $prefix, $filterValue);
+      my $updateResult = $self->update($dbh, $purgeObsoletes, $prefix, $filterValue, $storedDefinitionChange);
       if ($updateResult eq "broken") {
 	$broken = 1;
 	$tableStatus = "update failed";
       } else {
 	$tableStatus = "up-to-date";
       }
+
+      $needUpdate = 0
+	if $updateResult eq "up-to-date";
     }
   }
 
   TuningManager::TuningManager::Log::setUpdateNeededFlag()
-      if ($needUpdate or $prefix) and !$self->{alwaysUpdate};  # don't set the update flag for alwaysUpdate tables
+      if ($needUpdate or $prefix);
 
   if ($broken) {
     $self->{state} = "broken";
@@ -246,14 +263,14 @@ SQL
     $self->{state} = "up-to-date";
   }
 
-  TuningManager::TuningManager::Log::addLog("    $self->{name} found to be \"$self->{state}\"");
+  addLog("    $self->{name} found to be \"$self->{state}\"");
 
   $self->setStatus($dbh, $tableStatus);
   return $self->{state};
 }
 
 sub update {
-  my ($self, $dbh, $purgeObsoletes, $prefix, $filterValue) = @_;
+  my ($self, $dbh, $purgeObsoletes, $prefix, $filterValue, $storedDefinitionChange) = @_;
 
   my $startTime = time;
 
@@ -264,7 +281,7 @@ sub update {
 
   my $dateString = `date`;
   chomp($dateString);
-  TuningManager::TuningManager::Log::addLog("    Rebuilding tuning table " . $self->{name} . " on $dateString");
+  addLog("    Rebuilding tuning table " . $self->{name} . " on $dateString");
 
   $self->dropIntermediateTables($dbh, $prefix);
 
@@ -274,7 +291,7 @@ sub update {
 
     last if $updateError;
 
-    TuningManager::TuningManager::Log::addLog("running unionization to build $self->{name}\n")
+    addLog("running unionization to build $self->{name}\n")
 	if $self->{debug};
 
     $self->unionize($unionization, $dbh);
@@ -283,7 +300,7 @@ sub update {
   foreach my $sql (@{$self->{sqls}}) {
 
     if ($sql =~ /]]>/) {
-      TuningManager::TuningManager::Log::addErrorLog("SQL contains embedded CDATA close -- possible XML parse error. SQL -->>" . $sql . "<<--");
+      addErrorLog("SQL contains embedded CDATA close -- possible XML parse error. SQL -->>" . $sql . "<<--");
     }
 
     last if $updateError;
@@ -303,10 +320,10 @@ sub update {
     my $dblink = $self->{dblink};
     $sqlCopy =~ s/&dblink/$dblink/g;
 
-    TuningManager::TuningManager::Log::addLog("vvvvvv sql string changed: vvvvvv\nbefore: \"$sql\"\nafter: \"$sqlCopy\"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+    addLog("vvvvvv sql string changed: vvvvvv\nbefore: \"$sql\"\nafter: \"$sqlCopy\"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
 	if $self->{debug} && $sqlCopy ne $sql;
 
-    TuningManager::TuningManager::Log::addLog("running sql of length "
+    addLog("running sql of length "
 						   . length($sqlCopy)
 						   . " to build $self->{name}:\n$sqlCopy")
 	if $self->{debug};
@@ -314,7 +331,7 @@ sub update {
     $updateError = 1 if !TuningManager::TuningManager::Utils::sqlBugWorkaroundDo($dbh, $sqlCopy);;
 
     if ($dbh->errstr =~ /ORA-01652/) {
-      TuningManager::TuningManager::Log::addLog("Setting out-of-space flag, so notification email is sent.");
+      addLog("Setting out-of-space flag, so notification email is sent.");
       TuningManager::TuningManager::Log::setOutOfSpaceMessage($dbh->errstr);
     }
 
@@ -326,13 +343,13 @@ sub update {
     my $perlCopy = $perl;
     $perlCopy =~ s/&1/$suffix/g;  # use suffix to make db object names unique
 
-    TuningManager::TuningManager::Log::addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
+    addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
 	if $self->{debug};
     eval $perlCopy;
 
     if ($@) {
       $updateError = 1;
-      TuningManager::TuningManager::Log::addErrorLog("Error \"$@\" encountered executing Perl statement beginning:\n" . substr($perlCopy, 1, 100) );
+      addErrorLog("Error \"$@\" encountered executing Perl statement beginning:\n" . substr($perlCopy, 1, 100) );
     }
   }
 
@@ -340,6 +357,9 @@ sub update {
   $debug = " -debug " if $self->{debug};
 
   foreach my $program (@{$self->{programs}}) {
+    addErrorLog("The tuning table $self->{name} is updated by an external program but does not have the alwaysUpdate attribute.")
+	unless $self->{alwaysUpdate};
+
     last if $updateError;
 
     my $commandLine = $program->{commandLine}
@@ -350,21 +370,21 @@ sub update {
                       . $debug
                       . " 2>&1 ";
 
-    TuningManager::TuningManager::Log::addLog("running program with command line \"" . $commandLine . "\" to build $self->{name}");
+    addLog("running program with command line \"$commandLine\" to build $self->{name}");
 
     open(PROGRAM, $commandLine . "|");
     while (<PROGRAM>) {
       my $line = $_;
       chomp($line);
-      TuningManager::TuningManager::Log::addLog($line);
+      addLog($line);
     }
     close(PROGRAM);
     my $exitCode = $? >> 8;
 
-    TuningManager::TuningManager::Log::addLog("finished running program, with exit code $exitCode");
+    addLog("finished running program, with exit code $exitCode");
 
     if ($exitCode) {
-      TuningManager::TuningManager::Log::addErrorLog("unable to run standalone program:\n$commandLine");
+      addErrorLog("unable to run standalone program:\n$commandLine");
       $updateError = 1;
     }
   }
@@ -373,51 +393,75 @@ sub update {
 
   $self->dropIntermediateTables($dbh, $prefix, 'warn on nonexistence');
 
-  # publish main table
-  $self->publish($self->{name}, $suffix, $dbh, $purgeObsoletes, $prefix) or return "broken";
-
-  # publish ancillary tables
-  foreach my $ancillary (@{$self->{ancillaryTables}}) {
-      TuningManager::TuningManager::Log::addLog("publishing ancillary table " . $ancillary->{name});
-      $self->publish($ancillary->{name}, $suffix, $dbh, $purgeObsoletes, $prefix) or return "broken";
-  }
-
-  # store definition
-  if (!$prefix) {
-    TuningManager::TuningManager::Log::addErrorLog("unable to store table definition")
-	if $self->storeDefinition($dbh);
-  }
-
   my $buildDuration = time - $startTime;
-  my $recordCount = getRecordCount($dbh, $self->{name}, $prefix);
-  TuningManager::TuningManager::Log::addLog("    $buildDuration seconds to rebuild tuning table "
+  my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name}, $prefix);
+  addLog("    $buildDuration seconds to rebuild tuning table "
                                                  . $self->{name} . " with record count of " . $recordCount);
 
   if ($maxRebuildMinutes) {
-    TuningManager::TuningManager::Log::addErrorLog("table rebuild took longer than $maxRebuildMinutes minute maximum.")
+    addErrorLog("table rebuild took longer than $maxRebuildMinutes minute maximum.")
       if ($buildDuration > $maxRebuildMinutes * 60)
   }
 
-  TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration,
-                 $self->{instance}, $recordCount, $self->{logTableName}, $self->{housekeepingSchema})
-      if !$prefix;
+  my $unchanged;
 
-  return "neededUpdate"
+  if (!$prefix && !$storedDefinitionChange) {
+    my $startCompare = time;
+    $unchanged = $self->matchesPredecessor($suffix, $dbh);
+    my $compareDuration = time - $startCompare;
+    addLog("    $compareDuration seconds to compare " . $self->{name}
+	   . " (and any ancillary tables) with previous version. returned unchanged flag of: "
+	   . $unchanged);
+  }
+
+  if ($unchanged){
+    return "up-to-date";
+  } else {
+    # publish main table
+    $self->publish($self->{name}, $suffix, $dbh, $purgeObsoletes, $prefix) or return "broken";
+
+    # publish ancillary tables
+    foreach my $ancillary (@{$self->{ancillaryTables}}) {
+      addLog("publishing ancillary table " . $ancillary->{name});
+      $self->publish($ancillary->{name}, $suffix, $dbh, $purgeObsoletes, $prefix) or return "broken";
+    }
+
+    # store definition
+    if (!$prefix) {
+      addErrorLog("unable to store table definition")
+	  if $self->storeDefinition($dbh);
+    }
+
+    TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration,
+		  $self->{instance}, $recordCount, $self->{logTableName}, $self->{housekeepingSchema})
+	if !$prefix;
+
+    return "neededUpdate"
+  }
 }
 
 sub getRecordCount {
 
   my ($dbh, $name, $prefix) = @_;
+  my $recordCount = 0;
+  my $tableNotThere = 0;
 
+  $dbh->{PrintError} = 0;
   my $stmt = $dbh->prepare(<<SQL);
     select count(*) from $prefix$name
 SQL
-  $stmt->execute()
-    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
-  my ($recordCount) = $stmt->fetchrow_array();
-  $stmt->finish();
 
-  return $recordCount;
+  if (!$stmt) {
+    $tableNotThere = 1;
+  } else {
+    $stmt->execute()
+      or addErrorLog("\n" . $dbh->errstr . "\n");
+    ($recordCount) = $stmt->fetchrow_array();
+    $stmt->finish();
+  }
+  $dbh->{PrintError} = 1;
+
+  return ($tableNotThere, $recordCount);
 }
 
 sub storeDefinition {
@@ -432,7 +476,7 @@ SQL
 
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
-    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or addErrorLog("\n" . $dbh->errstr . "\n");
   $stmt->finish();
 
   my $sql = <<SQL;
@@ -444,7 +488,7 @@ SQL
   my $stmt = $dbh->prepare($sql);
 
   if (!$stmt->execute($self->{qualifiedName}, $self->getDefString())) {
-    TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
 
@@ -508,7 +552,7 @@ sub hasDependencyCycle {
 
     # log error if $self is earliest ancestor
     if ($ancestorsRef->[0] eq $self->{name}) {
-      TuningManager::TuningManager::Log::addErrorLog("ERROR: cycle of dependencies: " .
+      addErrorLog("ERROR: cycle of dependencies: " .
 						     join(" -> ", @{$ancestorsRef}) .
 						    " -> " . $self->{name});
       return 1;
@@ -533,7 +577,7 @@ sub dropIntermediateTables {
   my ($self, $dbh, $prefix, $warningFlag) = @_;
 
   foreach my $intermediate (@{$self->{intermediateTables}}) {
-    TuningManager::TuningManager::Log::addLog("    must drop intermediate table $prefix$intermediate->{name}");
+    addLog("    must drop intermediate table $prefix$intermediate->{name}");
 
     my $sql = <<SQL;
        drop table $prefix$intermediate->{name}
@@ -545,7 +589,7 @@ SQL
     $stmt->finish();
     $dbh->{PrintError} = 1;
 
-    TuningManager::TuningManager::Log::addLog("WARNING: intermediateTable"
+    addLog("WARNING: intermediateTable"
 						   . $intermediate->{name}
 						   . " was not created during the update of "
 						   . $self->{name})
@@ -566,7 +610,7 @@ SQL
   my $stmt = $dbh->prepare($sql);
   my $grantRtn = $stmt->execute();
   if (!$grantRtn) {
-    TuningManager::TuningManager::Log::addErrorLog("Failure on GRANT for new table:" . $dbh->errstr . "\n");
+    addErrorLog("Failure on GRANT for new table:" . $dbh->errstr . "\n");
     return 0;
   }
   $stmt->finish();
@@ -590,7 +634,7 @@ SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute("$prefix$table")
-      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or addErrorLog("\n" . $dbh->errstr . "\n");
     ($oldTable) = $stmt->fetchrow_array();
     $stmt->finish();
   } else {
@@ -605,7 +649,7 @@ SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute("$prefix$table")
-      or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+      or addErrorLog("\n" . $dbh->errstr . "\n");
     $stmt->finish();
   }
 
@@ -616,12 +660,12 @@ SQL
   my $synonymRtn = $dbh->do($sql);
 
   if (!defined $synonymRtn) {
-    TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    addErrorLog("\n" . $dbh->errstr . "\n");
   }
 
   # drop obsolete table, if we're doing that (and it exists)
   if (defined $synonymRtn && $purgeObsoletes && $oldTable) {
-    TuningManager::TuningManager::Log::addLog("    purging obsolete table " . $oldTable);
+    addLog("    purging obsolete table " . $oldTable);
     if (!$dbh->do("drop table " . $oldTable)) {
       my $message;
       if ($dbh->errstr =~ /ORA-02449/) {
@@ -629,13 +673,13 @@ SQL
       } else {
 	$message = "\n" . $dbh->errstr . "\n";
       }
-      TuningManager::TuningManager::Log::addErrorLog($message);
+      addErrorLog($message);
     }
   }
 
   # Run stored procedure to analye new table
   $dbh->do("BEGIN dbms_stats.gather_table_stats( ownname=> '" . $self->{schema} . "', tabname=> '$prefix$table$suffix', estimate_percent=> DBMS_STATS.AUTO_SAMPLE_SIZE, cascade=> DBMS_STATS.AUTO_CASCADE, degree=> null, no_invalidate=> DBMS_STATS.AUTO_INVALIDATE, granularity=> 'AUTO', method_opt=> 'FOR ALL COLUMNS SIZE AUTO'); END;")
-    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    or addErrorLog("\n" . $dbh->errstr . "\n");
 
   return $synonymRtn
 }
@@ -680,7 +724,7 @@ sub unionize {
   }
 
   unless(scalar @{$union->{source}} == scalar @unionMembers) {
-    TuningManager::TuningManager::Log::addErrorLog("The number of <source> does not equal the number of sql statments to be unioned for " . $self->{name});
+    addErrorLog("The number of <source> does not equal the number of sql statments to be unioned for " . $self->{name});
     die;
   }
 
@@ -689,7 +733,7 @@ sub unionize {
   my $createTable = "create table $union->{name}$suffix as\n"
     . join("\nunion\n", @unionMembers);
 
-  TuningManager::TuningManager::Log::addLog("creating union table with following statement:\n$createTable") if $self->{debug};
+  addLog("creating union table with following statement:\n$createTable") if $self->{debug};
   runSql($dbh, $createTable);
 }
 
@@ -795,7 +839,7 @@ SQL
 
   my $stmt = $dbh->prepare($sql);
 
-  TuningManager::TuningManager::Log::addLog("setting status of tuning table \""
+  addLog("setting status of tuning table \""
 						 . $self->{qualifiedName} . "\" to \""
 						 . $status . "\"");
 
@@ -803,13 +847,127 @@ SQL
   chomp($osUser);
 
   if (!$stmt->execute($status, $osUser, $self->{qualifiedName})) {
-    TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
 
   $stmt->finish();
 
   return;
+}
+
+sub matchesPredecessor {
+  my ($self, $suffix, $dbh) = @_;
+
+  my %liveRowCount;
+
+  # get live-table row counts
+  my ($predecessorMissing, $rowCount) = getRecordCount($dbh, $self->{name});
+  return 0 if $predecessorMissing;
+  $liveRowCount{$self->{name}} = $rowCount;
+
+  foreach my $ancillary (@{$self->{ancillaryTables}}) {
+    my ($predecessorMissing, $rowCount) = getRecordCount($dbh, $ancillary->{name});
+    return 0 if $predecessorMissing;
+    $liveRowCount{$ancillary->{name}} = $rowCount;
+  }
+
+  # compare counts of new tables
+  my ($tableMissing, $rowCount) = getRecordCount($dbh, $self->{name} . $suffix);
+  return 0 if $rowCount != $liveRowCount{$self->{name}};
+
+  foreach my $ancillary (@{$self->{ancillaryTables}}) {
+    my ($tableMissing, $rowCount) = getRecordCount($dbh, $ancillary->{name} . $suffix);
+    return 0 if $rowCount != $liveRowCount{$ancillary->{name}};
+  }
+
+  # since row counts match, compare tables.
+  return 0 if tablesDiffer($dbh, $self->{name},  $self->{name} . $suffix, $liveRowCount{$self->{name}});
+
+  foreach my $ancillary (@{$self->{ancillaryTables}}) {
+    return 0 if tablesDiffer($dbh, $ancillary->{name},  $ancillary->{name} . $suffix, $liveRowCount{$ancillary->{name}});
+  }
+
+  # every test passed, so they match
+  return 1;
+}
+
+sub tablesDiffer {
+  my ($dbh, $table1, $table2, $rowCount) = @_;
+
+  my $intersectQuery = getIntersectQuery($dbh, $table1, $table2);
+  # print "\$intersectQuery = \"$intersectQuery\"\n";
+  $dbh->{PrintError} = 0;
+  my $stmt = $dbh->prepare($intersectQuery) or addLog("\n" . $dbh->errstr . "\n");
+
+  if (!$stmt) {
+    return 1;
+  }
+
+  if (!$stmt->execute()) {
+    addErrorLog("\n" . $dbh->errstr . "\n");
+    return 1;
+  }
+
+  my ($intersectCount) = $stmt->fetchrow_array();
+
+  $stmt->finish();
+  $dbh->{PrintError} = 1;
+  return ($intersectCount == $rowCount) ? 0 : 1;
+}
+
+sub getIntersectQuery {
+  my ($dbh, $table1, $table2) = @_;
+
+  my $stmt = $dbh->prepare(<<SQL) or addLog("\n" . $dbh->errstr . "\n");
+    with given -- input string
+           as (select '$table2' as given_name from dual),
+         parsed -- separate table from schema (or look schema up), and capitalize
+           as (select given_name,
+                      case
+                        when instr(given.given_name, '.') > 0
+                          then upper(substr(given.given_name, 1, instr(given.given_name, '.') - 1))
+                          else sys_context('userenv', 'current_schema')
+                      end as schema_name,
+                      case
+                        when instr(given.given_name, '.') > 0
+                          then upper(substr(given.given_name, instr(given.given_name, '.') + 1))
+                          else upper(given_name)
+                      end as table_name
+               from given),
+         desyned -- substitute actual name, if it iss a synonym
+           as (select p.schema_name, p.table_name
+               from all_tables at, parsed p
+               where at.owner = p.schema_name and at.table_name = p.table_name
+                 union
+               select syn.table_owner as schema_name, syn.table_name
+               from all_synonyms syn, parsed p
+               where syn.owner = p.schema_name and syn.synonym_name = p.table_name)
+    select column_name, data_type
+    from desyned d, all_tab_columns atc
+    where d.schema_name = atc.owner and d.table_name = atc.table_name
+SQL
+
+  $stmt->execute() or die $dbh->errstr;
+  my $gotClob;
+  my @predicates;
+  while (my ($column, $datatype) = $stmt->fetchrow_array()) {
+    if ($datatype =~ /LOB/) {
+      $gotClob = 1;
+      push(@predicates,
+           "(dbms_lob.compare(t1.$column, t2.$column) = 0 or (t1.$column is null and t2.$column is null))");
+    } else {
+      push(@predicates,
+           "(t1.$column = t2.$column or (t1.$column is null and t2.$column is null))");
+    }
+  }
+
+  if ($gotClob) {
+    return "select count(*)\n from $table1 t1, $table2 t2\n where " . join("\n and ", @predicates);
+  } else {
+    return "select count(*)\n from (select * from $table1 intersect select * from $table2)";
+  }
+
 }
 
 1;
