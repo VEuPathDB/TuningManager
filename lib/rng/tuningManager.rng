@@ -14,6 +14,9 @@
 	  </optional>
 	  <zeroOrMore>
             <choice>
+              <element name="comment">
+                  <text/>
+              </element>
               <element name="internalDependency">
 		<attribute name="name" />
               </element>
