@@ -343,6 +343,9 @@ sub update {
     my $perlCopy = $perl;
     $perlCopy =~ s/&1/$suffix/g;  # use suffix to make db object names unique
 
+    # substitute prefix macro
+    $perlCopy =~ s/&prefix/$prefix/g;
+
     addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
 	if $self->{debug};
     eval $perlCopy;
