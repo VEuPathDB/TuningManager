@@ -176,10 +176,8 @@ sub getState {
   }
 
   # check internal dependencies
-addLog("my prefixEnabled is \"" . $self->{prefixEnabled} . "\"");
   foreach my $dependency (@{$self->getInternalDependencies()}) {
     addLog("    depends on tuning table " . $dependency->getName());
-addLog("dependency prefixEnabled is \"" . $dependency->{prefixEnabled} . "\"");
 
     # a prefixEnabled table must not depend on a non-prefixEnabled table
     addErrorLog("tuning table " . $self->{name}
