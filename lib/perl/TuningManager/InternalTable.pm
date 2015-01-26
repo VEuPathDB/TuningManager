@@ -179,6 +179,12 @@ sub getState {
   foreach my $dependency (@{$self->getInternalDependencies()}) {
     addLog("    depends on tuning table " . $dependency->getName());
 
+    # a prefixEnabled table must not depend on a non-prefixEnabled table
+    addErrorLog("tuning table " . $self->{name}
+		. " is prefixEnabled, but depends on " . $dependency->getName()
+		. ", which is not")
+      if $self->{prefixEnabled} eq "true" && $dependency->{prefixEnabled} ne "true";
+
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
     my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue);
@@ -589,7 +595,7 @@ SQL
     $stmt->finish();
     $dbh->{PrintError} = 1;
 
-    addLog("WARNING: intermediateTable"
+    addLog("WARNING: intermediate table "
 						   . $intermediate->{name}
 						   . " was not created during the update of "
 						   . $self->{name})
