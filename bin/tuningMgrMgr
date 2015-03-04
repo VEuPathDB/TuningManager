@@ -122,7 +122,7 @@ if (!$connectInstance) {
   if ($instance) {
     $connectInstance = $instance;
   } else {
-    $connectInstance = "apicommS";
+    $connectInstance = "apicommN";
     $dblink = "";
   }
 }
