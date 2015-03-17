@@ -55,9 +55,10 @@ sub new {
       $self->{qualifiedName} = $schema . "." . $name;
     }
 
-    # get timestamp, last_check, and definition from database
+    # get timestamp, status, last_check, and definition from database
     my $sql = <<SQL;
        select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp,
+              status,
               to_char(last_check, 'yyyy-mm-dd hh24:mi:ss') as last_check,
        definition
        from $housekeepingSchema.TuningTable
@@ -67,11 +68,12 @@ SQL
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
       or addErrorLog("\n" . $dbh->errstr . "\n");
-    my ($timestamp, $lastCheck, $dbDef) = $stmt->fetchrow_array();
+    my ($timestamp, $dbStatus, $lastCheck, $dbDef) = $stmt->fetchrow_array();
     $stmt->finish();
     $self->{timestamp} = $timestamp;
     $self->{lastCheck} = $lastCheck;
     $self->{dbDef} = $dbDef;
+    $self->{dbStatus} = $dbStatus;
 
     return $self;
   }
@@ -173,11 +175,20 @@ sub getState {
 	if $self->{debug};
     addLog("current:\n-------\n" . $self->getDefString() . "\n-------")
 	if $self->{debug};
+  } elsif ($self->{dbStatus} ne "up-to-date") {
+    addLog("    stored TuningTable record for $self->{name} has status \"" . $self->{dbStatus} . "\" -- update needed.");
+    $needUpdate = 1;
   }
 
   # check internal dependencies
   foreach my $dependency (@{$self->getInternalDependencies()}) {
     addLog("    depends on tuning table " . $dependency->getName());
+
+    # a prefixEnabled table must not depend on a non-prefixEnabled table
+    addErrorLog("tuning table " . $self->{name}
+		. " is prefixEnabled, but depends on " . $dependency->getName()
+		. ", which is not")
+      if $self->{prefixEnabled} eq "true" && $dependency->{prefixEnabled} ne "true";
 
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
@@ -589,7 +600,7 @@ SQL
     $stmt->finish();
     $dbh->{PrintError} = 1;
 
-    addLog("WARNING: intermediateTable"
+    addLog("WARNING: intermediate table "
 						   . $intermediate->{name}
 						   . " was not created during the update of "
 						   . $self->{name})
