@@ -55,9 +55,10 @@ sub new {
       $self->{qualifiedName} = $schema . "." . $name;
     }
 
-    # get timestamp, last_check, and definition from database
+    # get timestamp, status, last_check, and definition from database
     my $sql = <<SQL;
        select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp,
+              status,
               to_char(last_check, 'yyyy-mm-dd hh24:mi:ss') as last_check,
        definition
        from $housekeepingSchema.TuningTable
@@ -67,11 +68,12 @@ SQL
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
       or addErrorLog("\n" . $dbh->errstr . "\n");
-    my ($timestamp, $lastCheck, $dbDef) = $stmt->fetchrow_array();
+    my ($timestamp, $dbStatus, $lastCheck, $dbDef) = $stmt->fetchrow_array();
     $stmt->finish();
     $self->{timestamp} = $timestamp;
     $self->{lastCheck} = $lastCheck;
     $self->{dbDef} = $dbDef;
+    $self->{dbStatus} = $dbStatus;
 
     return $self;
   }
@@ -173,6 +175,9 @@ sub getState {
 	if $self->{debug};
     addLog("current:\n-------\n" . $self->getDefString() . "\n-------")
 	if $self->{debug};
+  } elsif ($self->{dbStatus} ne "up-to-date") {
+    addLog("    stored TuningTable record for $self->{name} has status \"" . $self->{dbStatus} . "\" -- update needed.");
+    $needUpdate = 1;
   }
 
   # check internal dependencies
