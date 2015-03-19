@@ -27,21 +27,29 @@ sub new {
     }
     $self->{dblink} = $dblink;
 
-    # get the timestamp
+    # retrieve timestamp and tuning-table name. If there's no record, return current time and null as name
     my $sql = <<SQL;
-       select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss')
-       from $housekeepingSchema.TuningTable$dblink
-       where lower(name) = lower('$self->{name}')
+       select to_char(nvl(timestamp, sysdate), 'yyyy-mm-dd hh24:mi:ss') as timestamp, name
+       from dual, $housekeepingSchema.TuningTable$dblink
+       where replace(dummy, 'X', lower('$self->{name}')) = lower(name(+))
 SQL
     my $stmt = $dbh->prepare($sql);
     $stmt->execute()
       or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
-    my ($timestamp) = $stmt->fetchrow_array();
+    my ($timestamp, $storedName) = $stmt->fetchrow_array();
     $stmt->finish();
 
-    if (!defined $timestamp) {
+    TuningManager::TuningManager::Log::addLog("WARNING No TuningTable record for " . $self->getName())
+	if (! $storedName);
+
+    # test for existance
+    $dbh->{PrintError} = 0;
+    my $stmt = $dbh->prepare(<<SQL);
+    select count(*) from $self->{name} where rownum=1
+SQL
+    $dbh->{PrintError} = 1;
+    if (!$stmt) {
       $self->{exists} = 0;
-      TuningManager::TuningManager::Log::addErrorLog("No TuningTable record for " . $self->getName());
     } else {
       $self->{exists} = 1;
     };
