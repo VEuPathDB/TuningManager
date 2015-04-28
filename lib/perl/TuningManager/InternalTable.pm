@@ -75,6 +75,8 @@ SQL
     $self->{dbDef} = $dbDef;
     $self->{dbStatus} = $dbStatus;
 
+    addLog("retrieved status \"$dbStatus\" for $self->{qualifiedName}");
+
     return $self;
   }
 

@@ -73,7 +73,7 @@ sub getTimestamp {
     my $dbh = $self->{dbh};
     my $dblink = $self->{dblink};
 
-    # get the last-modified date for this table
+    # get the last modified date for this table
     my $sql = <<SQL;
        select to_char(max(modification_date), 'yyyy-mm-dd hh24:mi:ss'), count(*)
        from $self->{name}$dblink
@@ -122,6 +122,7 @@ SQL
 	TuningManager::TuningManager::Log::addErrorLog("checking state of external dependency $self->{name}");
       }
       $self->{timestamp} = $self->getCurrentDate();
+      TuningManager::TuningManager::Log::addLog("    Setting timestamp to \"$self->{timestamp}\" for $self->{name}");
 
       if ($timestamp) {
 	# ExternalDependency record exists; update it
