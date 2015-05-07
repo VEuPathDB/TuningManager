@@ -73,9 +73,12 @@ sub getTimestamp {
     my $dbh = $self->{dbh};
     my $dblink = $self->{dblink};
 
+    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
+
     # get the last modified date for this table
     my $sql = <<SQL;
-       select to_char(max(modification_date), 'yyyy-mm-dd hh24:mi:ss'), count(*)
+       select nvl(to_char(max(modification_date), 'yyyy-mm-dd hh24:mi:ss'), '2000-01-01 00:00:00'),
+              count(*)
        from $self->{name}$dblink
 SQL
     my $stmt = $dbh->prepare($sql)
@@ -101,8 +104,6 @@ SQL
       or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
     my ($stored_max_mod_date, $stored_row_count, $timestamp) = $stmt->fetchrow_array();
     $stmt->finish();
-
-    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
 
     # compare stored and calculated table stats
     if ($max_mod_date eq $stored_max_mod_date && $row_count == $stored_row_count) {
