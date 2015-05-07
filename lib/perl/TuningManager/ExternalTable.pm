@@ -152,7 +152,7 @@ SQL
       $stmt->finish();
     }
 
-    TuningManager::TuningManager::Log::addLog("    $self->{name} has timestamp \"$timestamp\"");
+    TuningManager::TuningManager::Log::addLog("    $self->{name} has timestamp \"$self->{timestamp}\"");
 
     return $self->{timestamp};
 }
