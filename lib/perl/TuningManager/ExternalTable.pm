@@ -73,9 +73,12 @@ sub getTimestamp {
     my $dbh = $self->{dbh};
     my $dblink = $self->{dblink};
 
-    # get the last-modified date for this table
+    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
+
+    # get the last modified date for this table
     my $sql = <<SQL;
-       select to_char(max(modification_date), 'yyyy-mm-dd hh24:mi:ss'), count(*)
+       select nvl(to_char(max(modification_date), 'yyyy-mm-dd hh24:mi:ss'), '2000-01-01 00:00:00'),
+              count(*)
        from $self->{name}$dblink
 SQL
     my $stmt = $dbh->prepare($sql)
@@ -102,8 +105,6 @@ SQL
     my ($stored_max_mod_date, $stored_row_count, $timestamp) = $stmt->fetchrow_array();
     $stmt->finish();
 
-    my $debug = TuningManager::TuningManager::Log::getDebugFlag();
-
     # compare stored and calculated table stats
     if ($max_mod_date eq $stored_max_mod_date && $row_count == $stored_row_count) {
       # stored stats still valid
@@ -122,6 +123,7 @@ SQL
 	TuningManager::TuningManager::Log::addErrorLog("checking state of external dependency $self->{name}");
       }
       $self->{timestamp} = $self->getCurrentDate();
+      TuningManager::TuningManager::Log::addLog("    Setting timestamp to \"$self->{timestamp}\" for $self->{name}");
 
       if ($timestamp) {
 	# ExternalDependency record exists; update it
@@ -150,6 +152,8 @@ SQL
 	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
       $stmt->finish();
     }
+
+    TuningManager::TuningManager::Log::addLog("    $self->{name} has timestamp \"$self->{timestamp}\"");
 
     return $self->{timestamp};
 }

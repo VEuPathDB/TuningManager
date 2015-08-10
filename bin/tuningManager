@@ -330,7 +330,7 @@ my $hms = sprintf('%02d:%02d:%02d', $elapsed / 3600, ($elapsed % 3600) / 60, $el
 TuningManager::TuningManager::Log::addLogPreamble(time - $startTime .
 					       " seconds to run tuningManager ($hms)\n\n");
 
-TuningManager::TuningManager::Log::mailLog($notifyEmail, $instance)
+TuningManager::TuningManager::Log::mailLog($notifyEmail, $instance, $fromEmail)
   if $notifyEmail;
 
 
