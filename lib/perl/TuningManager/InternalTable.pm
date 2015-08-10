@@ -75,6 +75,8 @@ SQL
     $self->{dbDef} = $dbDef;
     $self->{dbStatus} = $dbStatus;
 
+    addLog("retrieved status \"$dbStatus\", timestamp \"$timestamp\", lastCheck \"$lastCheck\" for $self->{qualifiedName}");
+
     return $self;
   }
 
@@ -408,7 +410,7 @@ sub update {
   $self->dropIntermediateTables($dbh, $prefix, 'warn on nonexistence');
 
   my $buildDuration = time - $startTime;
-  my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name}, $prefix);
+  my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name} . $suffix, $prefix);
   addLog("    $buildDuration seconds to rebuild tuning table "
                                                  . $self->{name} . " with record count of " . $recordCount);
 
@@ -508,6 +510,7 @@ SQL
 
   $stmt->finish();
 
+  addLog("writing new record for tuning table \"$self->{qualifiedName}\" with status \"up-to-date\"");
   return;
 }
 

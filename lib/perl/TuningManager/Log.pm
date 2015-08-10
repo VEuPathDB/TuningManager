@@ -157,7 +157,7 @@ sub addLogBanner {
   }
 
 sub mailLog {
-  my ($recipientList, $instance_name) = @_;
+  my ($recipientList, $instance_name, $fromEmail) = @_;
 
   my $subject = "$instance_name";
 
@@ -169,7 +169,7 @@ sub mailLog {
 
   foreach my $recipient (split(/,/, $recipientList)) {
     if ($recipient && ($recipient ne "none")) {
-      open(MAIL, "|mail -s '$subject' $recipient");
+      open(MAIL, "|mail -s '$subject' -r $fromEmail $recipient");
       print MAIL getLog();
       close(MAIL);
     }
