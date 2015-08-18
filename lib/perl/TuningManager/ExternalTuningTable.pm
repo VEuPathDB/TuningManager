@@ -43,7 +43,7 @@ SQL
 	if (! $storedName);
 
     # test for existance
-#    $dbh->{PrintError} = 0;
+    $dbh->{PrintError} = 0;
     my $stmt = $dbh->prepare(<<SQL);
     select count(*) from $self->{name} $self->{dblink} where rownum=1
 SQL
