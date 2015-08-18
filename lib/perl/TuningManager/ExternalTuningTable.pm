@@ -43,9 +43,9 @@ SQL
 	if (! $storedName);
 
     # test for existance
-    $dbh->{PrintError} = 0;
+#    $dbh->{PrintError} = 0;
     my $stmt = $dbh->prepare(<<SQL);
-    select count(*) from $self->{name} where rownum=1
+    select count(*) from $self->{name} $self->{dblink} where rownum=1
 SQL
     $dbh->{PrintError} = 1;
     if (!$stmt) {
