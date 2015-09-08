@@ -16,7 +16,7 @@ sub new {
         $externalTuningTableDependencyNames, $intermediateTables, $ancillaryTables, $sqls,
         $perls, $unionizations, $programs, $dbh, $debug,
         $alwaysUpdate, $prefixEnabled, $maxRebuildMinutesParam, $instance, $propfile, $schema,
-        $password, $subversionDir, $dblink, $housekeepingSchema, $logTableName)
+        $password, $subversionDir, $dblink, $housekeepingSchema, $logTableName, $alwaysUpdateAll)
 	= @_;
 
     my $self = {};
@@ -41,6 +41,7 @@ sub new {
     $self->{externalTuningTableDependencies} = [];
     $self->{debug} = $debug;
     $self->{alwaysUpdate} = $alwaysUpdate;
+    $self->{alwaysUpdateAll} = $alwaysUpdateAll;
     $self->{prefixEnabled} = $prefixEnabled;
     $self->{instance} = $instance;
     $self->{propfile} = $propfile;
@@ -239,6 +240,11 @@ SQL
 
   if ($self->{alwaysUpdate}) {
     addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
+    $needUpdate = 1;
+  }
+
+  if ($self->{alwaysUpdateAll}) {
+    addLog("    " . $self->{name} . " must be updated because the global alwaysUpdate flag is set.");
     $needUpdate = 1;
   }
 
