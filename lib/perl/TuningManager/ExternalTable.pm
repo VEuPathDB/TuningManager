@@ -240,7 +240,7 @@ SQL
     $stmt->finish();
 
     # if it doesn't exist and -doUpdate is not set, complain
-    TuningManager::TuningManager::Log::addLog("$table.$schema has no trigger to keep modification_date up to date.")
+    TuningManager::TuningManager::Log::addLog("$schema.$table has no trigger to keep modification_date up to date.")
 	if (!$gotModDateTrigger && !$doUpdate);
 
     # if it doesn't exist and -doUpdate is set, create it
