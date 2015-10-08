@@ -1,0 +1,747 @@
+#!/usr/bin/perl
+
+use strict;
+use lib "$ENV{GUS_HOME}/lib/perl";
+use Data::Dumper;
+use XML::Simple;
+use DBI;
+use Getopt::Long qw(GetOptions);
+use TuningManager::TuningManager::InternalTable;
+use TuningManager::TuningManager::ExternalTable;
+use TuningManager::TuningManager::ExternalTuningTable;
+use TuningManager::TuningManager::TuningIndex;
+use TuningManager::TuningManager::Log qw(addLog addErrorLog addLogPreamble);
+use TuningManager::TuningManager::TableSuffix;
+use TuningManager::TuningManager::Utils;
+
+my $subversionDir;
+my $props;
+my $startTime = time;
+my $maxRebuildMinutes = 0;
+my $dbaEmail;
+my $fromEmail;
+
+my ($sec,$min,$hour,$mday,$mon,$year) = localtime();
+my $timestamp = sprintf('%4d-%02d-%02d %02d:%02d:%02d', $year+1900, $mon+1, $mday, $hour, $min, $sec);
+
+my $osUser = `whoami`;
+chomp($osUser);
+TuningManager::TuningManager::Log::addLogPreamble("Starting tuningManager as OS user \"$osUser\", "
+					       . TuningManager::TuningManager::Log::getProcessInfo()
+					       . " at $timestamp with arguments:\n"
+					       . join(' ', @ARGV));
+
+my $noArgs = !@ARGV; # check for no arguments now, before GetOptions consumes @ARGV
+
+my ($configFile, $propFile, $instance, $schema, $password, $tables,
+    $doUpdate, $debug, $notifyEmail, $cleanupWarnOnly, $cleanupAge, $forceUpdate,
+    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll);
+
+GetOptions("configFile=s" => \$configFile,
+           "propFile=s" => \$propFile,
+           "instance=s" => \$instance,
+           "schema=s" => \$schema,
+           "tables=s" => \$tables,
+           "doUpdate!" => \$doUpdate,
+           "forceUpdate!" => \$forceUpdate,
+           "notifyEmail=s" => \$notifyEmail,
+           "debug!" => \$debug,
+           "cleanupAge:i" => \$cleanupAge,
+           "cleanupWarnOnly!" => \$debug,
+           "maxWait=s" => \$maxWait,
+           "prefix=s" => \$prefix,
+           "filterValue=s" => \$filterValue,
+           "alwaysUpdate!" => \$alwaysUpdateAll,
+	  );
+
+TuningManager::TuningManager::Log::setLogfile($logfile);
+
+TuningManager::TuningManager::Log::setDebugFlag()
+  if $debug;
+
+TuningManager::TuningManager::Log::addErrorLog("parameter error: \"propFile\" must be specified")
+  unless ($propFile);
+TuningManager::TuningManager::Log::addErrorLog("parameter error: \"instance\" must be specified")
+  unless $instance;
+TuningManager::TuningManager::Log::addErrorLog("parameter error: \"configFile\" must be specified")
+  unless $configFile;
+&usage unless ($instance && $propFile && $configFile);
+
+exit if ($noArgs); # don't send a log email if they only want usage
+
+$cleanupAge = 0 if !defined $cleanupAge;
+
+$doUpdate = 1 if $forceUpdate;
+
+my $dbh;
+eval {
+  if ($propFile) {
+    my $simple = XML::Simple->new();
+    $props = $simple->XMLin($propFile);
+    my %permittedProperties = (password => 1,
+                               maxRebuildMinutes => 1,
+                               dbaEmail => 1,
+                               fromEmail => 1,
+                               dblink => 1,
+                               schema => 1,
+                               housekeepingSchema => 1,
+                               logTable => 1,
+                              );
+    my $badProp;
+    foreach my $foundProp (keys(%{$props})) {
+      if (!$permittedProperties{$foundProp}) {
+	TuningManager::TuningManager::Log::addErrorLog("invalid property \"$foundProp\"");
+	$badProp = 1;
+      }
+    }
+
+    my @requiredProperties = ('password',
+                              'fromEmail',
+                              'housekeepingSchema',
+                              'logTable',
+                              );
+    foreach my $requiredProp (@requiredProperties) {
+      if (!($props->{$requiredProp})) {
+	TuningManager::TuningManager::Log::addErrorLog("required property \"$requiredProp\" not found");
+	$badProp = 1;
+      }
+    }
+
+    die if $badProp;
+  }
+
+  # prefer schema from command line, then prop file, then hardwired default
+  $schema = $props->{schema} if !$schema;
+  $schema = 'TuningManager' if !$schema;
+
+  $maxRebuildMinutes = $props->{maxRebuildMinutes};
+
+  $dbaEmail = $props->{dbaEmail} if $props->{dbaEmail};
+  $fromEmail = $props->{fromEmail} if $props->{fromEmail};
+
+  TuningManager::TuningManager::Log::addLog("creating tuning tables with the prefix \"$prefix\"")
+      if $prefix;
+
+  $SIG{INT} = \&catch_signal;
+  $SIG{TERM} = \&catch_signal;
+
+  ($instance, $schema, $password) = TuningManager::TuningManager::Utils::getDbLoginInfo($instance, $propFile, $schema, $password);
+  TuningManager::TuningManager::Log::addLog("Logging in to the database as (and creating tuning tables in) the schema \"$schema\".");
+  $dbh = TuningManager::TuningManager::Utils::getDbHandle($instance, $schema, $password);
+
+  # check that the XML validation program is installed and runnable
+  my $validationProgram = "validateXmlWithRng";
+  TuningManager::TuningManager::Log::addErrorLog("failed to run XML validation program \"$validationProgram\"")
+      unless `which $validationProgram`;
+
+  # validate config file
+  TuningManager::TuningManager::Log::addLog("Using config file \"$configFile\"");
+  my $validationCmd = "$validationProgram $ENV{GUS_HOME}/lib/rng/tuningManager.rng $configFile |";
+  TuningManager::TuningManager::Log::addLog("Validating XML:\n" . $validationCmd);
+  open(PROGRAM, $validationCmd);
+  while (<PROGRAM>) {
+    my $line = $_;
+    chomp($line);
+    TuningManager::TuningManager::Log::addLog($line);
+  }
+  close(PROGRAM);
+  my $exitCode = $? >> 8;
+  TuningManager::TuningManager::Log::addErrorLog("invalid config file") if $exitCode;
+#   die "invalid config file" if $exitCode;
+
+  my ($config) = &parseConfigFile($configFile);
+
+  # create an object for each <tuningTable> entity
+  my %tuningTables;
+  my %externalTables;
+  my %externalTuningTables;
+
+  foreach my $tuningTable (@{$config->{tuningTable}}) {
+
+    $tuningTables{$tuningTable->{name}}
+      = TuningManager::TuningManager::InternalTable->
+	new($tuningTable->{name}, $tuningTable->{internalDependency}, $tuningTable->{externalDependency},
+	    $tuningTable->{externalTuningTableDependency}, $tuningTable->{intermediateTable},
+            $tuningTable->{ancillaryTable}, $tuningTable->{sql}, $tuningTable->{perl},
+            $tuningTable->{unionization}, $tuningTable->{program}, $dbh, $debug,
+            $tuningTable->{alwaysUpdate}, $tuningTable->{prefixEnabled},
+            $maxRebuildMinutes, $instance, $propFile, $schema, $password,
+            $subversionDir, $props->{dblink}, $props->{housekeepingSchema}, $props->{logTable}, $alwaysUpdateAll);
+  }
+
+  if ($doUpdate && !$prefix) {
+    clearDeadLock();
+    checkLockout($maxWait) if $maxWait;
+    $doUpdate = 0 if lockForUpdate($forceUpdate) eq "fail";
+  }
+
+  # validate config / check external files
+  TuningManager::TuningManager::Log::addLogBanner("Using configuration file and checking external files");
+  my $undefinedInternal;
+  my $nonexistentExternal;
+  my $nonexistentExternalTuningTable;
+  my $dependencyCycle;
+  foreach my $tableName (keys(%tuningTables)) {
+
+    # check for internalDependencies that aren't in the list of tuningTables
+    if ($tuningTables{$tableName}->getInternalDependencyNames()) {
+      foreach my $dependency (@{$tuningTables{$tableName}->getInternalDependencyNames()}) {
+	if (!$tuningTables{$dependency->{name}}) {
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an InternalDependency on $dependency->{name}, for which no description is supplied");
+	  $undefinedInternal = 1;
+	} else {
+	  # add object to list of internal dependencies
+	  $tuningTables{$tableName}->addInternalDependency($tuningTables{$dependency->{name}});
+	}
+      }
+    }
+
+    my $housekeepingSchema = $props->{housekeepingSchema};
+
+    # check for externalDependencies that aren't in the database
+    if ($tuningTables{$tableName}->getExternalDependencyNames()) {
+      foreach my $dependency (@{$tuningTables{$tableName}->getExternalDependencyNames()}) {
+
+	# new ExternalTable instance in the hash, if we haven't seen this
+	my $key = $dependency->{name} . '@' . $dependency->{dblink};
+	$externalTables{$key}
+	  = TuningManager::TuningManager::ExternalTable->
+	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate, $housekeepingSchema)
+	      unless ($externalTables{$key});
+
+	# add external-table object to list of external dependencies
+	$tuningTables{$tableName}->addExternalDependency($externalTables{$key});
+
+	if (!$externalTables{$key}->exists()) {
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an ExternalDependency on $dependency->{name}, but no such table exists");
+	  $nonexistentExternal = 1;
+	}
+      }
+    }
+
+    # check for externalTuningTableDependencies that aren't in the database
+    if ($tuningTables{$tableName}->getExternalTuningTableDependencyNames()) {
+      foreach my $dependency (@{$tuningTables{$tableName}->getExternalTuningTableDependencyNames()}) {
+
+	# new ExternalTuningTable instance in the hash, if we haven't seen this
+	my $key = $dependency->{name} . '@' . $dependency->{dblink};
+	$externalTuningTables{$key}
+	  = TuningManager::TuningManager::ExternalTuningTable->
+	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate, $housekeepingSchema)
+	      unless ($externalTuningTables{$key});
+
+	# add externalTuning-table object to list of externalTuning dependencies
+	$tuningTables{$tableName}->addExternalTuningTableDependency($externalTuningTables{$key});
+
+	if (!$externalTuningTables{$key}->exists()) {
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an ExternalTuningDependency on $key, but no such table exists");
+	  $nonexistentExternalTuningTable = 1;
+	}
+      }
+    }
+  }
+
+  # check for cycles in graph of dependencies
+  foreach my $table (keys(%tuningTables)) {
+    $dependencyCycle = 1
+      if $tuningTables{$table}->hasDependencyCycle([]);
+  }
+
+  if ($undefinedInternal || $nonexistentExternal || $nonexistentExternalTuningTable || $dependencyCycle) {
+    TuningManager::TuningManager::Log::addErrorLog("INVALID CONFIGURATION -- NOT UPDATING DATABASE");
+    $doUpdate = 0;
+  } else {
+    TuningManager::TuningManager::Log::addLog("Configuration file OK");
+  }
+
+  die "graph of tuning-table dependencies must be acyclic"
+    if ($dependencyCycle);
+
+  # indexes
+  TuningManager::TuningManager::Log::addLogBanner("Checking indexes");
+  my $indexesConfigured;
+  my $missingIndexes;
+  foreach my $tuningIndex (@{$config->{tuningIndex}}) {
+
+    $indexesConfigured++;
+    my $indexObject =
+      TuningManager::TuningManager::TuningIndex->
+	  new($tuningIndex->{name},
+	      $tuningIndex->{table},
+	      $tuningIndex->{content},
+	      $dbh);
+
+    if (!$indexObject->exists()) {
+      $missingIndexes++;
+      TuningManager::TuningManager::Log::addLog("must " . $indexObject->getCreateStatement());
+
+      $indexObject->create($dbh)
+	if $doUpdate;
+    }
+  }
+
+  # tables
+  TuningManager::TuningManager::Log::addLogBanner("Checking whether tuning tables are up to date");
+  # check (and potentially update) every tuning table
+  my @tableList;
+  my $tableParamCount = 0;
+  if ($tables) {
+    @tableList = split(/,/, $tables);
+    $tableParamCount = scalar(@tableList);
+  } else {
+    @tableList = keys(%tuningTables);
+  }
+
+  foreach my $table (@tableList) {
+    if (!$tuningTables{$table}) {
+      TuningManager::TuningManager::Log::addErrorLog("unknown tuning table $table");
+      next;
+    }
+
+    my $state = $tuningTables{$table}->getState($doUpdate, $dbh, !$cleanupAge, $prefix, $filterValue);
+  }
+
+  # cleanup
+  TuningManager::TuningManager::Log::addLogBanner("Cleanup");
+  cleanup($dbh, $cleanupAge, $cleanupWarnOnly, $prefix);
+
+  &checkForUnusableIndexes;
+
+  # summary
+  logSummary(\%tuningTables, $tableParamCount, $doUpdate, $indexesConfigured, $missingIndexes);
+
+  releaseLockForUpdate() if !$prefix;
+
+  # if a temporary config-file dir was checked out from svn, delete it now
+  if ($subversionDir && !$prefix) {
+    my @cmdLine = ("rm", "-rf", $subversionDir);
+    system(@cmdLine) == 0
+      or TuningManager::TuningManager::Log::addErrorLog("unable to remove temporary config directory");
+  }
+
+};
+
+# log any errors inside eval
+TuningManager::TuningManager::Log::addErrorLog($@)
+  if $@;
+
+my $elapsed = time - $startTime;
+my $hms = sprintf('%02d:%02d:%02d', $elapsed / 3600, ($elapsed % 3600) / 60, $elapsed % 60);
+
+TuningManager::TuningManager::Log::addLogPreamble(time - $startTime .
+					       " seconds to run tuningManager ($hms)\n\n");
+
+TuningManager::TuningManager::Log::mailLog($notifyEmail, $instance, $fromEmail)
+  if $notifyEmail;
+
+
+TuningManager::TuningManager::Log::mailOutOfSpaceReport($instance, $dbaEmail, $fromEmail)
+  if (TuningManager::TuningManager::Log::getOutOfSpaceMessage() && $dbaEmail && $fromEmail);
+
+die if TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
+
+###############################################################################
+
+sub usage {
+  TuningManager::TuningManager::Log::addLog(
+q{
+Create/update "tuning tables", denormalized copies of data for better web site performance.
+
+Usage: tuningManager -configFile <configXmlPath> -propFile <filename>
+                      -instance <dbInstance> [ -schema <database schema> ]
+                     [ -tables <list> ] [ -doUpdate ] [ -forceUpdate ]
+                     [ -notifyEmail <emailAddressList> ] [ -debug ]
+                     [ -cleanupWarnOnly ] [ -cleanupAge <days> ] [ -maxWait <hours> ]
+                     [ -prefix <prefix> ] [ -filterValue <value> ]
+
+options:
+  configFile      an xml file describing the tables to be created
+  propFile        file contains XML tuningProps entity containing password, schema, dblink, dbaEmail, or maxRebuildMinutes entities
+  instance        the database instance to login and create objects in
+  schema          the schema (database user) to login and create objects in
+  tables          check/update only listed tables (and their antecedants)
+  doUpdate        update any tables found to be out of date
+  notifyEmail     comma-separated list of email addresses to send log to. ("none" to suppress email)
+  cleanupWarnOnly name but don't drop obsolete tuning tables
+  cleanupAge      specify how long (in days) tuning table must be obsolete before dropping (default 0)
+  forceUpdate     perform update even if current_updater flag is set (implies -doUpdate)
+  maxWait         limit, in hours, to wait if another tuning manager is updating the database
+  debug           print debugging info
+  prefix          create tuning tables and synonyms with supplied prefix, by substituting this value
+                  for any occurrances of the "&prefix" macro
+  filterValue     substitute this value for any occurences in the XML of the "&filterValue" macro
+
+note:
+  The -instance, -configFile, and -propFile parameters are required.
+
+example:
+
+tuningManager -instance <db instance> -propFile <propFile> -configFile <XML file>
+});
+}
+
+
+sub parseConfigFile {
+  my ($configFile) = @_;
+
+  open(FILE, $configFile) || die "can't open configuration file '$configFile' for reading\n";
+  my $simple = XML::Simple->new();
+
+  # use forcearray so elements with one child are still arrays
+  # and use keyattr so that unions are given as an ordered list
+  # rather than a hash
+  my $config = $simple->XMLin($configFile,
+			    forcearray => 1,
+			    KeyAttr => {sqlValue=>'+name'});
+  if ($debug) {
+    print Dumper($config);
+    print "\n\n";
+  }
+
+  return ($config);
+}
+
+sub cleanup {
+  my ($dbh, $cleanupAge, $cleanupWarnOnly, $prefix) = @_;
+  my $cleanupCount = 0;
+  my $housekeepingSchema = $props->{housekeepingSchema};
+
+  # drop any tables that are listed as obsolete more than the threshold
+  #   and don't have a synonym pointed at them
+  my $sql = <<SQL;
+select ott.name,
+       to_char(sysdate - ott.timestamp, '9.99') as days_old
+from $housekeepingSchema.ObsoleteTuningTable ott,
+     all_tables at
+where ott.timestamp < sysdate - $cleanupAge
+  and ott.name = at.owner || '.' || at.table_name
+  and lower(ott.name) not in
+        (select lower(table_owner || '.' || table_name) from all_synonyms)
+SQL
+  TuningManager::TuningManager::Log::addLog($sql) if $debug;
+
+  my $select = $dbh->prepare($sql);
+  $select->execute()
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+
+  # prepare sql to delete ObsoleteTuningTable record when OTT is dropped
+  my $sql = <<SQL;
+delete from $housekeepingSchema.ObsoleteTuningTable
+where name = ?
+SQL
+  my $delete  = $dbh->prepare($sql);
+
+  while (my ($dropee, $daysOld) = $select->fetchrow_array()) {
+    $cleanupCount++;
+    my $dropMsg = "$dropee obsolete for $daysOld days.";
+
+    if (!$cleanupWarnOnly) {
+      $dropMsg .= " . . .dropping.";
+      my $sql = <<SQL;
+          drop table $dropee
+SQL
+      my $drop = $dbh->prepare($sql);
+      if (!$drop->execute()) {
+	my $message;
+	if ($dbh->errstr =~ /ORA-02449/) {
+	  $message = "\n" . $dbh->errstr . "\n\nNOTE: to avoid this error, all foreign-key constraints should be dropped on tuning tables once they are loaded, BEFORE they are put live.\n";
+	} else {
+	  $message = "\n" . $dbh->errstr . "\n";
+	}
+	TuningManager::TuningManager::Log::addErrorLog($message);
+      }
+      $drop->finish();
+
+      $delete->execute($dropee)
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+    }
+    TuningManager::TuningManager::Log::addLog($dropMsg);
+  }
+  $select->finish();
+  $delete->finish();
+
+  # clean up orphaned tuning tables. These are tables in the current tuning-table
+  # schema that have names like a current tuning table, but with a lower numeric
+  # suffix that don't have a synonym pointed at them and aren't listed in ObsolateTuningTable.
+  $sql = <<SQL;
+     select table_name
+     from (select synonym_name, tables.table_name, synonym_length, live_suffix   
+           from (select synonym_name, table_name, length(synonym_name) as synonym_length,
+                 substr(table_name, length(synonym_name) + 1) as live_suffix
+                 from user_synonyms
+                 where table_owner = sys_context( 'userenv', 'current_schema' )
+                   and substr(table_name, 1, length(synonym_name)) = synonym_name) synonyms,
+                (select table_name
+                 from user_tables
+                 minus select table_name
+                 from user_synonyms
+                 where table_owner = sys_context( 'userenv', 'current_schema' )
+                 minus select replace(name, sys_context( 'userenv', 'current_schema' ) || '.', '')
+                 from apidb.ObsoleteTuningTable) tables
+           where length(tables.table_name) > synonym_length -- synonym shorter than table
+             and substr(tables.table_name, 1, synonym_length) = synonym_name -- names match up to syn length
+             and nvl(regexp_replace(substr(tables.table_name, synonym_length + 1), '[0-9]*', ''), '0') = '0'
+          )
+      -- only delete table with suffix less than that of the live table
+     where live_suffix > to_number(substr(table_name, length(synonym_name) + 1))
+SQL
+
+  my $stmt = $dbh->prepare($sql);
+  $stmt->execute()
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+  while (my ($table) = $stmt->fetchrow_array()) {
+      TuningManager::TuningManager::Log::addLog("Dropping obsolete tuning table $table, which is not listed in $housekeepingSchema.ObsoleteTuningTable.");
+      $dbh->do("drop table $table")
+	or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+  }
+  $stmt->finish();
+
+  # check for $housekeepingSchema.ObsoleteTuningTable records whose tables don't exist
+  $sql = <<SQL;
+select name from $housekeepingSchema.ObsoleteTuningTable
+minus select owner || '.' || table_name
+from (select atab.owner, atab.table_name
+      from all_synonyms asyn, all_tables atab
+      where asyn.owner = atab.owner
+        and regexp_replace(atab.table_name, '[0-9]*\$', '') = asyn.synonym_name)
+SQL
+
+  my $stmt = $dbh->prepare($sql);
+  $stmt->execute()
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+  while (my ($table) = $stmt->fetchrow_array()) {
+    TuningManager::TuningManager::Log::addErrorLog("tuning table $table is listed in $housekeepingSchema.ObsoleteTuningTable but does not exist");
+  }
+  $stmt->finish();
+
+  TuningManager::TuningManager::Log::addLog("$cleanupCount obsolete tables found")
+      if $cleanupCount;
+
+  TuningManager::TuningManager::Log::addLog("*** NOTE: obsolete tables retained because -cleanupWarnOnly parameter is set ***")
+      if $cleanupCount && $cleanupWarnOnly;
+}
+
+sub lockForUpdate {
+  my ($forceUpdate) = @_;
+  my $housekeepingSchema = $props->{housekeepingSchema};
+
+  my $processInfo  = TuningManager::TuningManager::Log::getProcessInfo();
+
+  my $sql = <<SQL;
+    update $housekeepingSchema.InstanceMetaInfo
+    set current_updater = '$processInfo', update_start = sysdate
+SQL
+
+  $sql .= " where current_updater is null"
+    unless $forceUpdate;
+
+  $dbh->do($sql)
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+
+  my $stmt = $dbh->prepare("select current_updater from $housekeepingSchema.InstanceMetaInfo");
+  $stmt->execute();
+  my ($updater) = $stmt->fetchrow_array();
+
+  if ($updater ne $processInfo) {
+    my $updateLockoutMsg = <<MSG;
+Another tuningManager process appears to be updating the database. CURRENT_UPDATER is set to "$updater".
+Continuing in read-only mode, but not updating tuning tables. If this process ($updater) is not running, you can override this lockout by rerunning tuningManager with the "--forceUpdate" option.
+MSG
+    TuningManager::TuningManager::Log::addErrorLog($updateLockoutMsg);
+    return("fail");
+  }
+  $stmt->finish();
+}
+
+sub releaseLockForUpdate {
+  my $housekeepingSchema = $props->{housekeepingSchema};
+
+  $dbh->do("update $housekeepingSchema.InstanceMetaInfo set current_updater = null, update_start = null where current_updater = '"
+	   . TuningManager::TuningManager::Log::getProcessInfo()
+	   . "'")
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+}
+
+sub clearDeadLock {
+  my $housekeepingSchema = $props->{housekeepingSchema};
+
+  my $stmt = $dbh->prepare("select current_updater from $housekeepingSchema.InstanceMetaInfo");
+  $stmt->execute();
+  my ($updater) = $stmt->fetchrow_array();
+
+  return if !$updater;
+
+  if (!($updater =~ /process \d* on \S*/)) {
+    TuningManager::TuningManager::Log::addErrorLog("ERROR: parsing current_updater string: \"" . $updater . "\"");
+    return;
+  }
+
+  my @parts = split / /, $updater;
+  my $pid = $parts[1];
+  my $server = $parts[3];
+  my $current_server = `uname -n`;
+  chomp($current_server);
+
+  if ($current_server ne $server) {
+    TuningManager::TuningManager::Log::addErrorLog("can't check for tM process; it's on \"$server\" and I'm on \"$current_server\"");
+    return;
+  }
+
+  my $pid_test = ` ps -fp $pid|tail -n +2|wc -l`;
+  chomp($pid_test);
+  if (!$pid_test) {
+    # named process no longer exists; null out CURRENT_UPDATER
+    TuningManager::TuningManager::Log::addLog("CURRENT_UPDATER process (" . $updater . ") no longer exists; updating InstanceMetaInfo.");
+    $dbh->do("update $housekeepingSchema.InstanceMetaInfo set current_updater = null, update_start = null")
+    or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
+  }
+
+  return;
+}
+
+sub catch_signal {
+        my $signame = shift;
+        die "caught signal $signame";
+}
+
+sub checkLockout {
+
+  my ($maxWait) = @_;
+  my $wait = 0;
+
+  until ($wait > $maxWait) {
+
+    my $stmt = $dbh->prepare(<<SQL);
+        select nvl((sysdate - update_start) * 24, $maxWait + 1) -- if we are not locked out, force the wait value to greater than maxWait
+        from InstanceMetaInfo
+SQL
+
+    $stmt->execute();
+    ($wait) = $stmt->fetchrow_array();
+
+    if ($wait < $maxWait) {
+      my $dateString = `date`;
+      chomp($dateString);
+      TuningManager::TuningManager::Log::addLog("Waiting for another tuning manager at $dateString");
+      sleep (300);
+    }
+  }
+
+}
+
+sub checkForUnusableIndexes {
+  my $stmt = $dbh->prepare(<<SQL);
+                    select index_name
+                    from all_indexes
+                    where owner not in ('SYS', 'SYSTEM')
+                      and status != 'VALID'
+                      and (status != 'N/A'
+                           or index_name in (select index_name
+                                             from all_ind_partitions
+                                             where status != 'USABLE'
+                                               and (status != 'N/A'
+                                                    or index_name in (select index_name
+                                                                      from all_ind_subpartitions
+                                                                      where status != 'USABLE'))))
+SQL
+
+  $stmt->execute();
+  while (my ($index) = $stmt->fetchrow_array()) {
+    TuningManager::TuningManager::Log::addErrorLog("index \"$index\" is unusable");
+  }
+  $stmt->finish();
+}
+
+sub logSummary {
+  my ($tuningTableRef, $tableParamCount, $doUpdate, $indexesConfigured, $missingIndexes) = @_;
+
+  my %tuningTables = %$tuningTableRef;
+
+  my $tableCount = 0;
+  my $brokenCount = 0;
+  my $neededUpdateCount = 0;
+  my $upToDateCount = 0;
+  my @brokenList;
+  my @neededUpdateList;
+
+  foreach my $table (keys(%tuningTables)) {
+    $tableCount++;
+    my $state = $tuningTables{$table}->{state};
+    if ($state eq "broken") {
+      $brokenCount++;
+      push(@brokenList, $table);
+    } elsif ($state eq "neededUpdate") {
+      $neededUpdateCount++;
+      push(@neededUpdateList, $table);
+    } elsif ($state eq "up-to-date") {
+      $upToDateCount++;
+    } elsif ($state) {
+      addErrorLog("unknown state \"$state\" for table \"$table\"");
+    }
+  }
+
+  if (!$tableCount) {
+    addLog("No tuningTable entities were defined in the config file");
+  } else {
+    addLogPreamble("\n");
+    addLogPreamble(sprintf("%4d ", $tableCount) . pluralize($tableCount, "table") . " defined in XML");
+    addLogPreamble(sprintf("%4d ", $tableParamCount) . pluralize($tableParamCount, "table")
+                   . " named on command line with -tables parameter")
+	if $tableParamCount;
+    addLogPreamble(sprintf("%4d ", $upToDateCount) . pluralize($upToDateCount, "table") . " up to date");
+    addLogPreamble(sprintf("%4d ", $neededUpdateCount) . pluralize($neededUpdateCount, "table")
+                   . ($doUpdate ? " updated" : " needing update"));
+    addLogPreamble(sprintf("%4d ", $brokenCount) . pluralize($brokenCount, "table") . " broken");
+    addLogPreamble(" -- tuningManager ran successfully")
+      if !TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
+    addLogPreamble(" "); # newline to make summary stand out
+
+    # list broken tables
+    if ($brokenCount) {
+      addLogPreamble("   broken " . pluralize($brokenCount, "table") . ":");
+      foreach my $table (@brokenList) {
+	addLogPreamble("     $table");
+      }
+      addLogPreamble(" ");
+    }
+
+    # list updated/outdated tables
+    if ($neededUpdateCount) {
+      addLogPreamble("   " . pluralize($neededUpdateCount, "table") . ($doUpdate ? " updated:" : " needing update:"));
+      foreach my $table (@neededUpdateList) {
+	addLogPreamble("     $table");
+      }
+      addLogPreamble(" ");
+    }
+  }
+
+  if (!$indexesConfigured) {
+    addLogPreamble("No tuningIndex entities were defined in the config file");
+  } elsif ($missingIndexes) {
+    addLogPreamble($missingIndexes . " of the "
+		   . $indexesConfigured
+		   . " indexes configured were found to be missing");
+  } else {
+    addLogPreamble("All "
+		   . $indexesConfigured
+		   . " indexes were found to exist.");
+  }
+}
+
+sub pluralize {
+
+  # return the name that goes with the given quantity.
+  # plural form defaults to singular + "s"
+
+  # Examples:
+  # pluralize (1, "table") returns "table"
+  # pluralize (2, "table") returns "tables"
+  # pluralize (2, "index", "indices") returns "indices"
+
+  my ($quantity, $name, $pluralName) = @_;
+
+  $pluralName = $name . "s"
+    unless $pluralName;
+
+  return ($quantity == 1) ? $name : $pluralName;
+}

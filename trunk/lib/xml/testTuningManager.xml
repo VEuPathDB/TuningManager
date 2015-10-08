@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tuningConfig>
+
+  <!-- tuningTable name="AnnotationChange" alwaysUpdate="true">
+    <program commandLine="buildAnnotationChangeTT"/>
+  </tuningTable -->
+
+  <tuningTable name="HelloWorld" alwaysUpdate="true">
+    <!-- internalDependency name="AnnotationChange"/ -->
+
+    <sql>
+      <![CDATA[
+        create table HelloWorld&1 nologging as
+        select 'Hello, world!' as message from dual
+      ]]>
+    </sql>
+
+    <sql>
+      <![CDATA[
+        create index world_ix&1 on HelloWorld&1 (message)
+      ]]>
+    </sql>
+  </tuningTable>
+
+</tuningConfig>
