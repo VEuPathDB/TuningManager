@@ -924,11 +924,13 @@ sub tablesDiffer {
   my $stmt = $dbh->prepare($intersectQuery) or addLog("\n" . $dbh->errstr . "\n");
 
   if (!$stmt) {
+    $dbh->{PrintError} = 1;
     return 1;
   }
 
   if (!$stmt->execute()) {
-    addErrorLog("\n" . $dbh->errstr . "\n");
+    addLog("\n" . $dbh->errstr . "\n");
+    $dbh->{PrintError} = 1;
     return 1;
   }
 
