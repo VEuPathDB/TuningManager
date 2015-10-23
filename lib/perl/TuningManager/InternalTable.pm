@@ -293,6 +293,8 @@ sub update {
 
   my $startTime = time;
 
+  my $startTimeString = getDatabaseTime($dbh);
+
   TuningManager::TuningManager::Log::setUpdatePerformedFlag()
       unless $self->{alwaysUpdate};
 
@@ -451,7 +453,7 @@ sub update {
     # store definition
     if (!$prefix) {
       addErrorLog("unable to store table definition")
-	  if $self->storeDefinition($dbh);
+	  if $self->storeDefinition($dbh, $startTimeString);
     }
 
     TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration,
@@ -460,6 +462,20 @@ sub update {
 
     return "neededUpdate"
   }
+}
+
+sub getDatabaseTime {
+  my ($dbh) = @_;
+
+  my $stmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
+    select to_char(sysdate, 'yyyy-mm-dd hh24:mi:ss') from dual
+SQL
+
+  $stmt->execute() or addErrorLog("\n" . $dbh->errstr . "\n");
+  my ($timeString) = $stmt->fetchrow_array();
+  $stmt->finish();
+
+  return $timeString;
 }
 
 sub getRecordCount {
@@ -487,7 +503,7 @@ SQL
 }
 
 sub storeDefinition {
-  my ($self, $dbh) = @_;
+  my ($self, $dbh, $startTimeString) = @_;
 
   my $housekeepingSchema = $self->{housekeepingSchema};
 
@@ -504,12 +520,12 @@ SQL
   my $sql = <<SQL;
        insert into $housekeepingSchema.TuningTable
           (name, timestamp, definition, status, last_check)
-          values (?, sysdate, ?, 'up-to-date', sysdate)
+          values (?, to_date(?, 'yyyy-mm-dd hh24:mi:ss'), ?, 'up-to-date', sysdate)
 SQL
 
   my $stmt = $dbh->prepare($sql);
 
-  if (!$stmt->execute($self->{qualifiedName}, $self->getDefString())) {
+  if (!$stmt->execute($self->{qualifiedName}, $startTimeString, $self->getDefString())) {
     addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
