@@ -692,8 +692,12 @@ sub logSummary {
     addLogPreamble(sprintf("%4d ", $neededUpdateCount) . pluralize($neededUpdateCount, "table")
                    . ($doUpdate ? " updated" : " needing update"));
     addLogPreamble(sprintf("%4d ", $brokenCount) . pluralize($brokenCount, "table") . " broken");
-    addLogPreamble(" -- tuningManager ran successfully")
-      if !TuningManager::TuningManager::Log::getErrorsEncounteredFlag();
+
+    if (TuningManager::TuningManager::Log::getErrorsEncounteredFlag()) {
+      addLogPreamble(" -- TUNINGMANAGER FAILED!");
+    } else {
+      addLogPreamble(" -- tuningManager ran successfully");
+    }
     addLogPreamble(" "); # newline to make summary stand out
 
     # list broken tables
