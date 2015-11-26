@@ -694,7 +694,7 @@ sub logSummary {
     addLogPreamble(sprintf("%4d ", $brokenCount) . pluralize($brokenCount, "table") . " broken");
 
     if (TuningManager::TuningManager::Log::getErrorsEncounteredFlag()) {
-      addLogPreamble(" -- TUNINGMANAGER FAILED!");
+      addLogPreamble(" -- tuningManager ran with errors");
     } else {
       addLogPreamble(" -- tuningManager ran successfully");
     }
