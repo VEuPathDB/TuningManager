@@ -353,7 +353,7 @@ Usage: tuningManager -configFile <configXmlPath> -propFile <filename>
                      [ -tables <list> ] [ -doUpdate ] [ -forceUpdate ]
                      [ -notifyEmail <emailAddressList> ] [ -debug ]
                      [ -cleanupWarnOnly ] [ -cleanupAge <days> ] [ -maxWait <hours> ]
-                     [ -prefix <prefix> ] [ -filterValue <value> ]
+                     [ -prefix <prefix> ] [ -filterValue <value> ] [ -forDatasetPresenter <1> ]
 
 options:
   configFile      an xml file describing the tables to be created
@@ -371,6 +371,7 @@ options:
   prefix          create tuning tables and synonyms with supplied prefix, by substituting this value
                   for any occurrances of the "&prefix" macro
   filterValue     substitute this value for any occurences in the XML of the "&filterValue" macro
+  forDatasetPresenter   set if only DatasetPresenter tables are being updated; will return different subject line if run results in errors.
 
 note:
   The -instance, -configFile, and -propFile parameters are required.
