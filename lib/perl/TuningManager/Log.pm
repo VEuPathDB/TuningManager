@@ -157,15 +157,20 @@ sub addLogBanner {
   }
 
 sub mailLog {
-  my ($recipientList, $instance_name, $fromEmail) = @_;
+  my ($recipientList, $instance_name, $fromEmail, $forDatasetPresenter) = @_;
 
   my $subject = "$instance_name";
 
   $subject .= " - updated"
     if getUpdatePerformedFlag();
 
-  $subject .= " - ERRORS"
-    if getErrorsEncounteredFlag();
+  if (getErrorsEncounteredFlag()) {
+    if ($forDatasetPresenter) {
+      $subject .= " - DatasetPresenter ERRORS";
+    } else {
+      $subject .= " - ERRORS";
+    }
+  }
 
   foreach my $recipient (split(/,/, $recipientList)) {
     if ($recipient && ($recipient ne "none")) {
