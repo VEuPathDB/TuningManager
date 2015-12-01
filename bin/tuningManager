@@ -35,7 +35,7 @@ my $noArgs = !@ARGV; # check for no arguments now, before GetOptions consumes @A
 
 my ($configFile, $propFile, $instance, $schema, $password, $tables,
     $doUpdate, $debug, $notifyEmail, $cleanupWarnOnly, $cleanupAge, $forceUpdate,
-    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll);
+    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter);
 
 GetOptions("configFile=s" => \$configFile,
            "propFile=s" => \$propFile,
@@ -52,6 +52,7 @@ GetOptions("configFile=s" => \$configFile,
            "prefix=s" => \$prefix,
            "filterValue=s" => \$filterValue,
            "alwaysUpdate!" => \$alwaysUpdateAll,
+           "forDatasetPresenter:i" => \$forDatasetPresenter,
 	  );
 
 TuningManager::TuningManager::Log::setLogfile($logfile);
@@ -331,7 +332,7 @@ my $hms = sprintf('%02d:%02d:%02d', $elapsed / 3600, ($elapsed % 3600) / 60, $el
 TuningManager::TuningManager::Log::addLogPreamble(time - $startTime .
 					       " seconds to run tuningManager ($hms)\n\n");
 
-TuningManager::TuningManager::Log::mailLog($notifyEmail, $instance, $fromEmail)
+TuningManager::TuningManager::Log::mailLog($notifyEmail, $instance, $fromEmail, $forDatasetPresenter)
   if $notifyEmail;
 
 
@@ -352,7 +353,7 @@ Usage: tuningManager -configFile <configXmlPath> -propFile <filename>
                      [ -tables <list> ] [ -doUpdate ] [ -forceUpdate ]
                      [ -notifyEmail <emailAddressList> ] [ -debug ]
                      [ -cleanupWarnOnly ] [ -cleanupAge <days> ] [ -maxWait <hours> ]
-                     [ -prefix <prefix> ] [ -filterValue <value> ]
+                     [ -prefix <prefix> ] [ -filterValue <value> ] [ -forDatasetPresenter <1> ]
 
 options:
   configFile      an xml file describing the tables to be created
@@ -370,6 +371,7 @@ options:
   prefix          create tuning tables and synonyms with supplied prefix, by substituting this value
                   for any occurrances of the "&prefix" macro
   filterValue     substitute this value for any occurences in the XML of the "&filterValue" macro
+  forDatasetPresenter   set if only DatasetPresenter tables are being updated; will return different subject line if run results in errors.
 
 note:
   The -instance, -configFile, and -propFile parameters are required.
@@ -694,7 +696,7 @@ sub logSummary {
     addLogPreamble(sprintf("%4d ", $brokenCount) . pluralize($brokenCount, "table") . " broken");
 
     if (TuningManager::TuningManager::Log::getErrorsEncounteredFlag()) {
-      addLogPreamble(" -- TUNINGMANAGER FAILED!");
+      addLogPreamble(" -- tuningManager ran with errors");
     } else {
       addLogPreamble(" -- tuningManager ran successfully");
     }
