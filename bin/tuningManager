@@ -35,7 +35,7 @@ my $noArgs = !@ARGV; # check for no arguments now, before GetOptions consumes @A
 
 my ($configFile, $propFile, $instance, $schema, $password, $tables,
     $doUpdate, $debug, $notifyEmail, $cleanupWarnOnly, $cleanupAge, $forceUpdate,
-    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter);
+    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter, $purgeOrphanTables);
 
 GetOptions("configFile=s" => \$configFile,
            "propFile=s" => \$propFile,
@@ -53,6 +53,7 @@ GetOptions("configFile=s" => \$configFile,
            "filterValue=s" => \$filterValue,
            "alwaysUpdate!" => \$alwaysUpdateAll,
            "forDatasetPresenter:i" => \$forDatasetPresenter,
+           "purgeOrphanTables!" => \$purgeOrphanTables,
 	  );
 
 TuningManager::TuningManager::Log::setLogfile($logfile);
@@ -66,6 +67,8 @@ TuningManager::TuningManager::Log::addErrorLog("parameter error: \"instance\" mu
   unless $instance;
 TuningManager::TuningManager::Log::addErrorLog("parameter error: \"configFile\" must be specified")
   unless $configFile;
+TuningManager::TuningManager::Log::addErrorLog("the -forceUpdate and -purgeOrphanTables must not be used together")
+  if ($forceUpdate && $purgeOrphanTables);
 &usage unless ($instance && $propFile && $configFile);
 
 exit if ($noArgs); # don't send a log email if they only want usage
@@ -174,6 +177,10 @@ eval {
     clearDeadLock();
     checkLockout($maxWait) if $maxWait;
     $doUpdate = 0 if lockForUpdate($forceUpdate) eq "fail";
+  }
+
+  if ($doUpdate && $purgeOrphanTables) {
+    cleanup($dbh, $cleanupAge, $cleanupWarnOnly, $purgeOrphanTables);
   }
 
   # validate config / check external files
@@ -304,7 +311,7 @@ eval {
 
   # cleanup
   TuningManager::TuningManager::Log::addLogBanner("Cleanup");
-  cleanup($dbh, $cleanupAge, $cleanupWarnOnly, $prefix);
+  cleanup($dbh, $cleanupAge, $cleanupWarnOnly);
 
   &checkForUnusableIndexes;
 
@@ -404,7 +411,7 @@ sub parseConfigFile {
 }
 
 sub cleanup {
-  my ($dbh, $cleanupAge, $cleanupWarnOnly, $prefix) = @_;
+  my ($dbh, $cleanupAge, $cleanupWarnOnly, $purgeOrphanTables) = @_;
   my $cleanupCount = 0;
   my $housekeepingSchema = $props->{housekeepingSchema};
 
@@ -484,9 +491,14 @@ SQL
              and substr(tables.table_name, 1, synonym_length) = synonym_name -- names match up to syn length
              and nvl(regexp_replace(substr(tables.table_name, synonym_length + 1), '[0-9]*', ''), '0') = '0'
           )
-      -- only delete table with suffix less than that of the live table
+SQL
+
+# only delete table with suffix less than that of the live table,
+# unless doing a full purge
+$sql .= <<SQL unless $purgeOrphanTables;
      where live_suffix > to_number(substr(table_name, length(synonym_name) + 1))
 SQL
+  TuningManager::TuningManager::Log::addLog($sql) if $debug;
 
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
