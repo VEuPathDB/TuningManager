@@ -284,7 +284,8 @@ SQL
 
   addLog("    $self->{name} found to be \"$self->{state}\"");
 
-  $self->setStatus($dbh, $tableStatus);
+  $self->setStatus($dbh, $tableStatus)
+    if !$prefix;
   return $self->{state};
 }
 
