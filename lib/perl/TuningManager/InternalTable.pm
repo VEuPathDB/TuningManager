@@ -252,6 +252,9 @@ SQL
   $tableStatus = "needs update"
     if $needUpdate;
 
+  # if a rebuild succeeds, we'll skip the call to setStatus() below
+  my $skipSetStatus;
+
   if ( ($doUpdate and $needUpdate) or $self->{alwaysUpdate} or ($doUpdate and $prefix)) {
     if ($prefix && !$self->{prefixEnabled}) {
       addErrorLog("attempt to update tuning table " . $self->{name} . ". This table does not have the prefixEnabled attribute, but the tuning manager was run with the -prefix parameter set.");
@@ -263,6 +266,7 @@ SQL
 	$tableStatus = "update failed";
       } else {
 	$tableStatus = "up-to-date";
+	$skipSetStatus = 1;
       }
 
       $needUpdate = 0
@@ -284,8 +288,11 @@ SQL
 
   addLog("    $self->{name} found to be \"$self->{state}\"");
 
+  # update the stored record for this tuning table
+  # unless this is a prefix run or we just rebuilt it
   $self->setStatus($dbh, $tableStatus)
-    if !$prefix;
+    unless $prefix || $skipSetStatus;
+
   return $self->{state};
 }
 
