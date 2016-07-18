@@ -361,6 +361,7 @@ Usage: tuningManager -configFile <configXmlPath> -propFile <filename>
                      [ -notifyEmail <emailAddressList> ] [ -debug ]
                      [ -cleanupWarnOnly ] [ -cleanupAge <days> ] [ -purgeOrphanTables ]
                      [ -maxWait <hours> ] [ -prefix <prefix> ] [ -filterValue <value> ]
+                     [ -alwaysUpdate ]
                      [ -forDatasetPresenter <1> ]
 
 options:
@@ -380,6 +381,7 @@ options:
   prefix              create tuning tables and synonyms with supplied prefix, by substituting this value
                       for any occurrances of the "&prefix" macro
   filterValue         substitute this value for any occurences in the XML of the "&filterValue" macro
+  alwaysUpdate        update every tuning table evaluated
   forDatasetPresenter set if only DatasetPresenter tables are being updated; will return different subject line if run results in errors.
 
 note:
