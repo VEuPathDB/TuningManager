@@ -437,7 +437,7 @@ sub update {
 
   my $unchanged;
 
-  if (!$prefix && !$storedDefinitionChange) {
+  if (!$prefix && !$storedDefinitionChange && $self->{dbStatus} eq "up-to-date") {
     my $startCompare = time;
     $unchanged = $self->matchesPredecessor($suffix, $dbh);
     my $compareDuration = time - $startCompare;
