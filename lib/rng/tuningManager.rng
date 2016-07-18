@@ -25,6 +25,9 @@
 		<optional>
 		  <attribute name="dblink" />
 		</optional>
+		<optional>
+		  <attribute name="noTrigger" />
+		</optional>
               </element>
               <element name="externalTuningTableDependency">
 		<attribute name="name" />

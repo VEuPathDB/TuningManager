@@ -13,8 +13,9 @@ my $currentDate;
 
 sub new {
     my ($class,
-	$name,               # name of database table
+        $name,               # name of database table
         $dblink,             # dblink (if any) needed to access table
+        $noTrigger,          # optional attribute to prevent creation of date trigger
         $dbh,                # database handle
         $doUpdate,           # are we updating, not just checking, the db?
         $housekeepingSchema, # where do my overhead tables live?
@@ -26,6 +27,7 @@ sub new {
     bless($self, $class);
     $self->{name} = $name;
     $self->{dbh} = $dbh;
+    $self->{noTrigger} = $noTrigger;
     $self->{housekeepingSchema} = $housekeepingSchema;
 
     if ($dblink) {
@@ -174,6 +176,9 @@ sub checkTrigger {
     my ($self, $doUpdate) = @_;
 
     my $dbh = $self->{dbh};
+
+    # do nothing if the noTrigger attribute is set
+    return if $self->{noTrigger} eq "true";
 
     # don't mess with triggers if we're looking at a remote table
     return if $self->{dblink};

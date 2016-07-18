@@ -214,7 +214,7 @@ eval {
 	my $key = $dependency->{name} . '@' . $dependency->{dblink};
 	$externalTables{$key}
 	  = TuningManager::TuningManager::ExternalTable->
-	    new($dependency->{name}, $dependency->{dblink}, $dbh, $doUpdate, $housekeepingSchema)
+	    new($dependency->{name}, $dependency->{dblink}, $dependency->{noTrigger}, $dbh, $doUpdate, $housekeepingSchema)
 	      unless ($externalTables{$key});
 
 	# add external-table object to list of external dependencies
