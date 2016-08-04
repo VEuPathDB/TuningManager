@@ -312,6 +312,30 @@ sub update {
   chomp($dateString);
   addLog("    Rebuilding tuning table " . $self->{name} . " on $dateString");
 
+  # how many steps of each type?
+  my $stepCount;
+  my @stepsByType;
+  if ($self->{unionizations}) {
+    $stepCount += scalar(@{$self->{unionizations}});
+    push(@stepsByType, scalar(@{$self->{unionizations}}) . " unionization(s)");
+  }
+  if ($self->{sqls}) {
+    $stepCount += scalar(@{$self->{sqls}});
+    push(@stepsByType, scalar(@{$self->{sqls}}) . " SQL statement(s)");
+  }
+  if ($self->{perls}) {
+    $stepCount += scalar(@{$self->{perls}});
+    push(@stepsByType, scalar(@{$self->{perls}}) . " Perl programs(s)");
+  }
+  if ($self->{programs}) {
+    $stepCount += scalar(@{$self->{programs}});
+    push(@stepsByType, scalar(@{$self->{programs}}) . " external program(s)");
+  }
+
+  if ($self->{debug}) {
+    addLog("    $stepCount step(s) needed. (" . join(", ", @stepsByType) . ")");
+  }
+
   $self->dropIntermediateTables($dbh, $prefix);
 
   my $updateError;
@@ -323,7 +347,11 @@ sub update {
     addLog("running unionization to build $self->{name}\n")
 	if $self->{debug};
 
+    my $stepStartTime = time;
     $self->unionize($unionization, $dbh);
+    (my $oneline = substr($unionization, 0, 60)) =~ s/\s+/ /g;
+    addLog((time - $stepStartTime) . " seconds to run the unionization beginning \"$oneline\"")
+      if ($self->{debug} and $stepCount > 1);
   }
 
   foreach my $sql (@{$self->{sqls}}) {
@@ -349,15 +377,17 @@ sub update {
     my $dblink = $self->{dblink};
     $sqlCopy =~ s/&dblink/$dblink/g;
 
-    addLog("vvvvvv sql string changed: vvvvvv\nbefore: \"$sql\"\nafter: \"$sqlCopy\"^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-	if $self->{debug} && $sqlCopy ne $sql;
-
     addLog("running sql of length "
-						   . length($sqlCopy)
-						   . " to build $self->{name}:\n$sqlCopy")
-	if $self->{debug};
+	   . length($sqlCopy)
+	   . " to build $self->{name}:\n$sqlCopy")
+      if $self->{debug};
 
+    my $stepStartTime = time;
     $updateError = 1 if !TuningManager::TuningManager::Utils::sqlBugWorkaroundDo($dbh, $sqlCopy);;
+
+    (my $oneline = substr($sqlCopy, 0, 60)) =~ s/\s+/ /g;
+    addLog((time - $stepStartTime) . " seconds to run the SQL statement beginning \"$oneline\"")
+      if ($self->{debug} and $stepCount > 1);
 
     if ($dbh->errstr =~ /ORA-01652/) {
       addLog("Setting out-of-space flag, so notification email is sent.");
@@ -377,7 +407,11 @@ sub update {
 
     addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
 	if $self->{debug};
+    my $stepStartTime = time;
     eval $perlCopy;
+    (my $oneline = substr($perlCopy, 0, 60)) =~ s/\s+/ /g;
+    addLog((time - $stepStartTime) . " seconds to run the Perl program beginning \"$oneline\"")
+      if ($self->{debug} and $stepCount > 1);
 
     if ($@) {
       $updateError = 1;
@@ -404,6 +438,7 @@ sub update {
 
     addLog("running program with command line \"$commandLine\" to build $self->{name}");
 
+    my $stepStartTime = time;
     open(PROGRAM, $commandLine . "|");
     while (<PROGRAM>) {
       my $line = $_;
@@ -414,6 +449,9 @@ sub update {
     my $exitCode = $? >> 8;
 
     addLog("finished running program, with exit code $exitCode");
+
+    addLog((time - $stepStartTime) . " seconds to run the command line \"$commandLine\"")
+      if ($self->{debug} and $stepCount > 1);
 
     if ($exitCode) {
       addErrorLog("unable to run standalone program:\n$commandLine");
