@@ -404,6 +404,7 @@ sub update {
 
     # substitute prefix macro
     $perlCopy =~ s/&prefix/$prefix/g;
+    $perlCopy =~ s/&filterValue/$filterValue/g;
 
     addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
 	if $self->{debug};
