@@ -424,7 +424,7 @@ sub update {
   $debug = " -debug " if $self->{debug};
 
   foreach my $program (@{$self->{programs}}) {
-    addErrorLog("The tuning table $self->{name} is updated by an external program but does not have the alwaysUpdate attribute.")
+    addLog("Warning: The tuning table $self->{name} is updated by an external program but does not have the alwaysUpdate attribute.")
 	unless $self->{alwaysUpdate};
 
     last if $updateError;
