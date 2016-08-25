@@ -171,7 +171,7 @@ sub getState {
     $needUpdate = 1;
     $storedDefinitionChange = 1;
   } elsif ($self->{dbDef} ne $self->getDefString()) {
-    addLog("    stored TuningTable record (checked $self->{lastCheck}) differs from current definition for $self->{name} -- update needed.");
+    addLog("    stored TuningTable record differs from current definition for $self->{name} -- update needed.");
     $needUpdate = 1;
     $storedDefinitionChange = 1;
     addLog("stored:\n-------\n" . $self->{dbDef} . "\n-------")
@@ -198,10 +198,15 @@ sub getState {
     my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue);
     TuningManager::TuningManager::Log::decreaseIndent();
 
-    if ($childState eq "neededUpdate" || $dependency->getTimestamp() gt $self->getLastCheck()) {
+    if ($childState eq "neededUpdate") {
       $needUpdate = 1;
-      addLog("    $self->{name} needs update because it depends on " . $dependency->getName() . ", which was found to be out of date (or is simply newer).");
-    } elsif ($childState eq "broken") {
+      addLog("    $self->{name} needs update because it depends on " . $dependency->getName() . ", which was found to be out of date.");
+    }
+    if ($dependency->getTimestamp() gt $self->getLastCheck()) {
+      $needUpdate = 1;
+      addLog("    $self->{name} (creation timestamp: " . $self->getTimestamp() . ", last check: " . $self->getLastCheck() . ") needs update because it depends on " . $dependency->getName() . " (creation timestamp: " . $dependency->getTimestamp() . ")");
+    }
+    if ($childState eq "broken") {
       $broken = 1;
       addLog("    $self->{name} is broken because it depends on " . $dependency->getName() . ", which is broken.");
     }
@@ -212,7 +217,7 @@ sub getState {
     addLog("    depends on external table " . $dependency->getName());
     if ($dependency->getTimestamp() gt $self->{lastCheck}) {
       $needUpdate = 1;
-      addLog("    date of $self->{name} ($self->{lastCheck}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
+      addLog("    $self->{name} (creation timestamp: " . $self->getTimestamp() . ", last_check: $self->{lastCheck}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
     }
   }
 
@@ -252,9 +257,6 @@ SQL
   $tableStatus = "needs update"
     if $needUpdate;
 
-  # if a rebuild succeeds, we'll skip the call to setStatus() below
-  my $skipSetStatus;
-
   if ( ($doUpdate and $needUpdate) or $self->{alwaysUpdate} or ($doUpdate and $prefix)) {
     if ($prefix && !$self->{prefixEnabled}) {
       addErrorLog("attempt to update tuning table " . $self->{name} . ". This table does not have the prefixEnabled attribute, but the tuning manager was run with the -prefix parameter set.");
@@ -266,7 +268,6 @@ SQL
 	$tableStatus = "update failed";
       } else {
 	$tableStatus = "up-to-date";
-	$skipSetStatus = 1;
       }
 
       $needUpdate = 0
@@ -291,7 +292,7 @@ SQL
   # update the stored record for this tuning table
   # unless this is a prefix run or we just rebuilt it
   $self->setStatus($dbh, $tableStatus)
-    unless $prefix || $skipSetStatus;
+    unless $prefix;
 
   return $self->{state};
 }
@@ -461,6 +462,7 @@ sub update {
   }
 
   return "broken" if $updateError;
+  $self->{lastCheck} = $startTimeString;
 
   $self->dropIntermediateTables($dbh, $prefix, 'warn on nonexistence');
 
@@ -496,6 +498,9 @@ sub update {
       addLog("publishing ancillary table " . $ancillary->{name});
       $self->publish($ancillary->{name}, $suffix, $dbh, $purgeObsoletes, $prefix) or return "broken";
     }
+
+    # update in-memory creation timestamp
+    $self->{timestamp} = $startTimeString;
 
     # store definition
     if (!$prefix) {
@@ -567,12 +572,12 @@ SQL
   my $sql = <<SQL;
        insert into $housekeepingSchema.TuningTable
           (name, timestamp, definition, status, last_check)
-          values (?, to_date(?, 'yyyy-mm-dd hh24:mi:ss'), ?, 'up-to-date', sysdate)
+          values (?, to_date(?, 'yyyy-mm-dd hh24:mi:ss'), ?, 'up-to-date', to_date(?, 'yyyy-mm-dd hh24:mi:ss'))
 SQL
 
   my $stmt = $dbh->prepare($sql);
 
-  if (!$stmt->execute($self->{qualifiedName}, $startTimeString, $self->getDefString())) {
+  if (!$stmt->execute($self->{qualifiedName}, $startTimeString, $self->getDefString(), $startTimeString)) {
     addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
@@ -919,7 +924,7 @@ sub setStatus {
        update $housekeepingSchema.TuningTable
        set status = ?,
            check_os_user = ?,
-           last_check = sysdate
+           last_check = to_date(?, 'yyyy-mm-dd hh24:mi:ss')
        where lower(name) = lower(?)
 SQL
 
@@ -932,7 +937,7 @@ SQL
   my $osUser = `whoami`;
   chomp($osUser);
 
-  if (!$stmt->execute($status, $osUser, $self->{qualifiedName})) {
+  if (!$stmt->execute($status, $osUser, $self->{lastCheck}, $self->{qualifiedName})) {
     addErrorLog("\n" . $dbh->errstr . "\n");
     return "fail";
   }
