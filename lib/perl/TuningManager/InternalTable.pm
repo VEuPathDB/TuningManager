@@ -217,7 +217,11 @@ sub getState {
     addLog("    depends on external table " . $dependency->getName());
     if ($dependency->getTimestamp() gt $self->{lastCheck}) {
       $needUpdate = 1;
-      addLog("    $self->{name} (creation timestamp: " . $self->getTimestamp() . ", last_check: $self->{lastCheck}) is older than observation timestamp of " . $dependency->getName() . " (" . $dependency->getTimestamp() . ") -- update needed.");
+      addLog("    $self->{name} (creation timestamp: " . $self->getTimestamp() .
+             ", last_check: $self->{lastCheck}) is older than observation timestamp of " . 
+             $dependency->getName() . " (" . $dependency->getTimestamp() .
+             ") -- update needed.")
+	if $self->getTimestamp();
     }
   }
 
