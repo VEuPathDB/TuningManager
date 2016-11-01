@@ -166,7 +166,7 @@ sub mailLog {
 
   if (getErrorsEncounteredFlag()) {
     if ($forDatasetPresenter) {
-      $subject .= " - DatasetPresenter ERRORS";
+      $subject .= " - DatasetPresenter and/or GbrowseTracksOrganism ERRORS";
     } else {
       $subject .= " - ERRORS";
     }
