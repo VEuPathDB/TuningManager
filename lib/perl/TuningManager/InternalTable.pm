@@ -1017,29 +1017,30 @@ sub getIntersectQuery {
   my ($dbh, $table1, $table2) = @_;
 
   my $stmt = $dbh->prepare(<<SQL) or addLog("\n" . $dbh->errstr . "\n");
-    with given -- input string
-           as (select '$table2' as given_name from dual),
-         parsed -- separate table from schema (or look schema up), and capitalize
-           as (select given_name,
-                      case
-                        when instr(given.given_name, '.') > 0
-                          then upper(substr(given.given_name, 1, instr(given.given_name, '.') - 1))
-                          else sys_context('userenv', 'current_schema')
-                      end as schema_name,
-                      case
-                        when instr(given.given_name, '.') > 0
-                          then upper(substr(given.given_name, instr(given.given_name, '.') + 1))
-                          else upper(given_name)
-                      end as table_name
-               from given),
-         desyned -- substitute actual name, if it iss a synonym
-           as (select p.schema_name, p.table_name
-               from all_tables at, parsed p
-               where at.owner = p.schema_name and at.table_name = p.table_name
-                 union
-               select syn.table_owner as schema_name, syn.table_name
-               from all_synonyms syn, parsed p
-               where syn.owner = p.schema_name and syn.synonym_name = p.table_name)
+    with
+      given -- input string
+        as (select '$table2' as given_name from dual),
+      parsed -- separate table from schema (or look schema up), and capitalize
+        as (select given_name,
+                   case
+                     when instr(given.given_name, '.') > 0
+                       then upper(substr(given.given_name, 1, instr(given.given_name, '.') - 1))
+                       else sys_context('userenv', 'current_schema')
+                   end as schema_name,
+                 case
+                   when instr(given.given_name, '.') > 0
+                     then upper(substr(given.given_name, instr(given.given_name, '.') + 1))
+                     else upper(given_name)
+                 end as table_name
+            from given),
+      desyned -- substitute actual name, if it iss a synonym
+        as (  select p.schema_name, p.table_name
+              from all_tables at, parsed p
+              where at.owner = p.schema_name and at.table_name = p.table_name
+            union
+              select syn.table_owner as schema_name, syn.table_name
+              from all_synonyms syn, parsed p
+              where syn.owner = p.schema_name and syn.synonym_name = p.table_name)
     select column_name, data_type
     from desyned d, all_tab_columns atc
     where d.schema_name = atc.owner and d.table_name = atc.table_name
