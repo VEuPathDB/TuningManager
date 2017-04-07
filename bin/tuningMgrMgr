@@ -407,15 +407,15 @@ sub updateInstance {
     system("cp $ENV{GUS_HOME}/lib/java/db_driver/* $dir/gus_home/lib/java/db_driver");
     chdir "$dir/project_home";
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/install/trunk install");
-    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/$svn ApiCommonShared");
+    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonModel/$svn ApiCommonModel");
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/WDK/$svn WDK");
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/FgpUtil/$svn FgpUtil");
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/WSF/$svn WSF");
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/CBIL/$svn CBIL");
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/ReFlow/$svn ReFlow");
     system("svn checkout https://www.cbil.upenn.edu/svn/gus/TuningManager/$svn TuningManager");
-    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/EuPathPresenters/$svn EuPathPresenters");
-    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/EuPathDatasets/$svn EuPathDatasets");
+    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonPresenters/$svn ApiCommonPresenters");
+    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonDatasets/$svn ApiCommonDatasets");
 
     writeGusConfigFile($dir, $instance);
 
@@ -423,15 +423,15 @@ sub updateInstance {
     # using an existing directory; get it up to date
     chdir "$dir/project_home";
     system("svn switch https://www.cbil.upenn.edu/svn/gus/install/$svn install");
-    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonShared/$svn ApiCommonShared");
+    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonModel/$svn ApiCommonModel");
     system("svn switch https://www.cbil.upenn.edu/svn/gus/WDK/$svn WDK");
     system("svn switch https://www.cbil.upenn.edu/svn/gus/FgpUtil/$svn FgpUtil");
     system("svn switch https://www.cbil.upenn.edu/svn/gus/WSF/$svn WSF");
     system("svn switch https://www.cbil.upenn.edu/svn/gus/CBIL/$svn CBIL");
     system("svn switch https://www.cbil.upenn.edu/svn/gus/ReFlow/$svn ReFlow");
     system("svn switch https://www.cbil.upenn.edu/svn/gus/TuningManager/$svn TuningManager");
-    system("svn switch https://www.cbil.upenn.edu/svn/apidb/EuPathPresenters/$svn EuPathPresenters");
-    system("svn switch https://www.cbil.upenn.edu/svn/apidb/EuPathDatasets/$svn EuPathDatasets");
+    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonPresenters/$svn ApiCommonPresenters");
+    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonDatasets/$svn ApiCommonDatasets");
   }
 
   # build and run
@@ -446,7 +446,7 @@ sub updateInstance {
   $cmd .= " -configFile " . getConfigFileName($configFile, $tuningRegistry, $dir);
 
 
-  system("source $dir/project_home/install/bin/gusEnv.bash -local; bld ApiCommonShared; bld TuningManager; propertiesFromDatasets EuPathDatasets");
+  system("source $dir/project_home/install/bin/gusEnv.bash -local; bld ApiCommonModel; bld TuningManager; propertiesFromDatasets ApiCommonDatasets");
   print "\$cmd = \"$cmd\"\n";
   system("source $dir/project_home/install/bin/gusEnv.bash -local; $cmd");
   my $exitCode = $? >> 8;
