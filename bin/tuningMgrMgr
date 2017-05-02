@@ -207,7 +207,7 @@ sub list {
 
   my $stmt = $dbh->prepare(<<SQL);
       select ti.instance_nickname,
-             replace(replace(tf.subversion_url, 'https://www.cbil.upenn.edu/svn/apidb/ApiCommonData/', ''), '/Load/lib/xml', ''),
+             replace(replace(tf.subversion_url, 'https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonData/', ''), '/Load/lib/xml', ''),
              ti.family_name
       from apidb_r.TuningInstance$dblink ti, apidb_r.TuningFamily$dblink tf
       where (ti.archived is null or ti.archived = 0) and
@@ -252,7 +252,7 @@ sub addInstance {
 
   # find out whether this family exists
   my $stmt = $dbh->prepare(<<SQL);
-      select replace(replace(subversion_url, 'https://www.cbil.upenn.edu/svn/apidb/ApiCommonData/', ''), '/Load/lib/xml', '')
+      select replace(replace(subversion_url, 'https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonData/', ''), '/Load/lib/xml', '')
       from apidb_r.TuningFamily\@prodS.login_comment
       where family_name = '$family'
 SQL
@@ -357,7 +357,7 @@ SQL
 
 sub svnUrl {
   my ($svn) = @_;
-  return "https://www.cbil.upenn.edu/svn/apidb/ApiCommonData/$svn/Load/lib/xml"
+  return "https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonData/$svn/Load/lib/xml"
 }
 
 sub archive {
@@ -406,32 +406,32 @@ sub updateInstance {
     make_path("$dir/project_home", "$dir/gus_home/lib/java/db_driver");
     system("cp $ENV{GUS_HOME}/lib/java/db_driver/* $dir/gus_home/lib/java/db_driver");
     chdir "$dir/project_home";
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/install/trunk install");
-    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonModel/$svn ApiCommonModel");
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/WDK/$svn WDK");
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/FgpUtil/$svn FgpUtil");
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/WSF/$svn WSF");
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/CBIL/$svn CBIL");
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/ReFlow/$svn ReFlow");
-    system("svn checkout https://www.cbil.upenn.edu/svn/gus/TuningManager/$svn TuningManager");
-    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonPresenters/$svn ApiCommonPresenters");
-    system("svn checkout https://www.cbil.upenn.edu/svn/apidb/ApiCommonDatasets/$svn ApiCommonDatasets");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/install/trunk install");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonModel/$svn ApiCommonModel");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/WDK/$svn WDK");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/FgpUtil/$svn FgpUtil");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/WSF/$svn WSF");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/CBIL/$svn CBIL");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/ReFlow/$svn ReFlow");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/gus/TuningManager/$svn TuningManager");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonPresenters/$svn ApiCommonPresenters");
+    system("svn checkout https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonDatasets/$svn ApiCommonDatasets");
 
     writeGusConfigFile($dir, $instance);
 
   } else {
     # using an existing directory; get it up to date
     chdir "$dir/project_home";
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/install/$svn install");
-    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonModel/$svn ApiCommonModel");
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/WDK/$svn WDK");
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/FgpUtil/$svn FgpUtil");
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/WSF/$svn WSF");
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/CBIL/$svn CBIL");
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/ReFlow/$svn ReFlow");
-    system("svn switch https://www.cbil.upenn.edu/svn/gus/TuningManager/$svn TuningManager");
-    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonPresenters/$svn ApiCommonPresenters");
-    system("svn switch https://www.cbil.upenn.edu/svn/apidb/ApiCommonDatasets/$svn ApiCommonDatasets");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/install/$svn install");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonModel/$svn ApiCommonModel");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/WDK/$svn WDK");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/FgpUtil/$svn FgpUtil");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/WSF/$svn WSF");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/CBIL/$svn CBIL");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/ReFlow/$svn ReFlow");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/gus/TuningManager/$svn TuningManager");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonPresenters/$svn ApiCommonPresenters");
+    system("svn switch https://cbilsvn.pmacs.upenn.edu/svn/apidb/ApiCommonDatasets/$svn ApiCommonDatasets");
   }
 
   # build and run
