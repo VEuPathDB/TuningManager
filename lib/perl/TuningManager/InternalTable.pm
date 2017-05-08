@@ -711,7 +711,7 @@ SQL
   $stmt->finish();
 
   # get name of old table (for subsequenct purging). . .
-  my ($oldTable, $explicitSchema, $table);
+  my ($oldTable, $tableExists, $explicitSchema, $table);
 
   if ($tuningTableName =~ /\./) {
     ($explicitSchema, $table) = split(/\./, $tuningTableName);
@@ -721,16 +721,22 @@ SQL
 
   if ($purgeObsoletes) {
     my $sql = <<SQL;
-      select table_owner || '.' || table_name
-      from all_synonyms
-      where owner = sys_context ('USERENV', 'CURRENT_SCHEMA')
-         and synonym_name = upper(?)
+      select syns.table_owner || '.' || syns.table_name as the_table,
+             case when tabs.table_name is null
+                    then 0
+                  else 1
+             end as table_exists
+      from all_synonyms syns, all_tables tabs
+      where syns.owner = sys_context ('USERENV', 'CURRENT_SCHEMA')
+        and syns.synonym_name = upper(?)
+        and syns.owner = tabs.owner(+)
+        and syns.table_name = tabs.table_name(+)
 SQL
 
     my $stmt = $dbh->prepare($sql);
     $stmt->execute("$prefix$table")
       or addErrorLog("\n" . $dbh->errstr . "\n");
-    ($oldTable) = $stmt->fetchrow_array();
+    ($oldTable, $tableExists) = $stmt->fetchrow_array();
     $stmt->finish();
   } else {
     # . . . or just mark it obsolete
@@ -759,7 +765,7 @@ SQL
   }
 
   # drop obsolete table, if we're doing that (and it exists)
-  if (defined $synonymRtn && $purgeObsoletes && $oldTable) {
+  if (defined $synonymRtn && $purgeObsoletes && $oldTable && $tableExists) {
     addLog("    purging obsolete table " . $oldTable);
     if (!$dbh->do("drop table " . $oldTable)) {
       my $message;
