@@ -6,6 +6,7 @@ use Data::Dumper;
 use XML::Simple;
 use DBI;
 use Getopt::Long qw(GetOptions);
+use File::Basename;
 use TuningManager::TuningManager::InternalTable;
 use TuningManager::TuningManager::ExternalTable;
 use TuningManager::TuningManager::ExternalTuningTable;
@@ -133,27 +134,11 @@ eval {
   TuningManager::TuningManager::Log::addLog("Logging in to the database as (and creating tuning tables in) the schema \"$schema\".");
   $dbh = TuningManager::TuningManager::Utils::getDbHandle($instance, $schema, $password);
 
-  # check that the XML validation program is installed and runnable
-  my $validationProgram = "validateXmlWithRng";
-  TuningManager::TuningManager::Log::addErrorLog("failed to run XML validation program \"$validationProgram\"")
-      unless `which $validationProgram`;
+  # if configFile is a pathname, cd there so <import> files are relative
+  my $configDir = dirname($configFile);
+  chdir $configDir if $configDir;
 
-  # validate config file
-  TuningManager::TuningManager::Log::addLog("Using config file \"$configFile\"");
-  my $validationCmd = "$validationProgram $ENV{GUS_HOME}/lib/rng/tuningManager.rng $configFile |";
-  TuningManager::TuningManager::Log::addLog("Validating XML:\n" . $validationCmd);
-  open(PROGRAM, $validationCmd);
-  while (<PROGRAM>) {
-    my $line = $_;
-    chomp($line);
-    TuningManager::TuningManager::Log::addLog($line);
-  }
-  close(PROGRAM);
-  my $exitCode = $? >> 8;
-  TuningManager::TuningManager::Log::addErrorLog("invalid config file") if $exitCode;
-#   die "invalid config file" if $exitCode;
-
-  my ($config) = &parseConfigFile($configFile);
+  my ($config) = &validateAndParseXml($configFile);
 
   # create an object for each <tuningTable> entity
   my %tuningTables;
@@ -394,8 +379,28 @@ tuningManager -instance <db instance> -propFile <propFile> -configFile <XML file
 }
 
 
-sub parseConfigFile {
+sub validateAndParseXml {
   my ($configFile) = @_;
+
+  # check that the XML validation program is installed and runnable
+  my $validationProgram = "validateXmlWithRng";
+  TuningManager::TuningManager::Log::addErrorLog("failed to run XML validation program \"$validationProgram\"")
+      unless `which $validationProgram`;
+
+  # validate config file
+  TuningManager::TuningManager::Log::addLog("Using config file \"$configFile\"");
+  my $validationCmd = "$validationProgram $ENV{GUS_HOME}/lib/rng/tuningManager.rng $configFile |";
+  TuningManager::TuningManager::Log::addLog("Validating XML:\n" . $validationCmd);
+  open(PROGRAM, $validationCmd);
+  while (<PROGRAM>) {
+    my $line = $_;
+    chomp($line);
+    TuningManager::TuningManager::Log::addLog($line);
+  }
+  close(PROGRAM);
+  my $exitCode = $? >> 8;
+  TuningManager::TuningManager::Log::addErrorLog("invalid config file") if $exitCode;
+  die "invalid config file" if $exitCode;
 
   open(FILE, $configFile) || die "can't open configuration file '$configFile' for reading\n";
   my $simple = XML::Simple->new();
@@ -406,8 +411,20 @@ sub parseConfigFile {
   my $config = $simple->XMLin($configFile,
 			    forcearray => 1,
 			    KeyAttr => {sqlValue=>'+name'});
+
+  foreach my $import (@{$config->{import}}) {
+    my $importedConfig = validateAndParseXml($import->{file});
+
+    # augment parent config with imported config
+    foreach my $hashKey (keys(%{$importedConfig})) {
+      if ($hashKey ne "import") {
+	push(@{$config->{$hashKey}}, @{$importedConfig->{$hashKey}});
+      }
+    }
+  }
+
   if ($debug) {
-    print Dumper($config);
+    print "tuningManager XML>>>\n" . Dumper($config) . "<<<tuningManager XML\n";
     print "\n\n";
   }
 
