@@ -3,7 +3,8 @@
          datatypeLibrary="http://www.w3.org/2001/XMLSchema-datatypes">
   <start>
     <element name="tuningConfig">
-      <oneOrMore>
+      <zeroOrMore>
+        <choice>
 	<element name="tuningTable">
 	  <attribute name="name" />
 	  <optional>
@@ -75,7 +76,11 @@
             </element>
 	  </zeroOrMore>    
 	</element>
-      </oneOrMore>
+	<element name="import">
+          <attribute name="file"/>
+	</element>
+        </choice>
+      </zeroOrMore>
     </element>
   </start>
 </grammar>
