@@ -42,6 +42,8 @@ create table &1 TuningMgrExternalDependency (
 
 grant select on &1 TuningMgrExternalDependency to gus_r;
 grant insert, update, delete on &1 TuningMgrExternalDependency to gus_w;
+-- Limit portal_dblink to TuningMgrExternalDependency, https://redmine.apidb.org/issues/28093
+grant select, insert, update, delete on &1 TuningMgrExternalDependency to portal_dblink;
 
 create table &1 InstanceMetaInfo as
 select sys_context ('USERENV', 'SERVICE_NAME') as instance_nickname,
