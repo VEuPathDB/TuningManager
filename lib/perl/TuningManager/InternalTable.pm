@@ -435,10 +435,12 @@ sub update {
     last if $updateError;
 
     my $commandLine = $program->{commandLine}
-                      . " -instance '" . $self->{instance} . "'"
-                      . " -propfile '" . $self->{propfile} . "'"
-                      . " -schema '" . $self->{schema} . "'"
-                      . " -suffix '" . $suffix . "'"
+                      . " -instance " . $self->{instance}
+                      . " -propfile " . $self->{propfile}
+                      . " -schema " . $self->{schema}
+                      . " -suffix " . $suffix
+                      . " -prefix '" . $prefix . "'"
+                      . " -filterValue '" . $filterValue . "'"
                       . $debug
                       . " 2>&1 ";
 
