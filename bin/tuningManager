@@ -517,7 +517,7 @@ SQL
 # only delete table with suffix less than that of the live table,
 # unless doing a full purge
 $sql .= <<SQL unless $purgeOrphanTables;
-     where live_suffix > to_number(substr(table_name, length(synonym_name) + 1))
+     where live_suffix > to_number(regexp_replace(substr(table_name, length(synonym_name) + 1), '[^0-9]', ''))
 SQL
   TuningManager::TuningManager::Log::addLog($sql) if $debug;
 
