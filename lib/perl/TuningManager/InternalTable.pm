@@ -165,6 +165,11 @@ sub getState {
   my $tableStatus; # to store in TuningTable
   my $storedDefinitionChange;
 
+  if ($prefix && $self->{prefixEnabled} ne "true") {
+    addLog("    $self->{name} is not prefix-enabled; setting prefix to null for check/update.");
+    $prefix = undef;
+  }
+
   # check if the definition is different (or none is stored)
   if (!$self->{dbDef}) {
     addLog("    no TuningTable record exists in database for $self->{name} -- update needed.");
@@ -186,12 +191,6 @@ sub getState {
   # check internal dependencies
   foreach my $dependency (@{$self->getInternalDependencies()}) {
     addLog("    depends on tuning table " . $dependency->getName());
-
-    # a prefixEnabled table must not depend on a non-prefixEnabled table
-    addErrorLog("tuning table " . $self->{name}
-		. " is prefixEnabled, but depends on " . $dependency->getName()
-		. ", which is not")
-      if $self->{prefixEnabled} eq "true" && $dependency->{prefixEnabled} ne "true";
 
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
