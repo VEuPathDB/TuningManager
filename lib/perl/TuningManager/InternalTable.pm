@@ -264,7 +264,7 @@ SQL
     if ($prefix && !$self->{prefixEnabled}) {
       addErrorLog("attempt to update tuning table " . $self->{name} . ". This table does not have the prefixEnabled attribute, but the tuning manager was run with the -prefix parameter set.");
       $broken = 1;
-    } else {
+    } elsif (!$broken) {
       my $updateResult = $self->update($dbh, $purgeObsoletes, $prefix, $filterValue, $storedDefinitionChange);
       if ($updateResult eq "broken") {
 	$broken = 1;
