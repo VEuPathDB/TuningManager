@@ -180,7 +180,9 @@ eval {
     if ($tuningTables{$tableName}->getInternalDependencyNames()) {
       foreach my $dependency (@{$tuningTables{$tableName}->getInternalDependencyNames()}) {
 	if (!$tuningTables{$dependency->{name}}) {
-	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an InternalDependency on $dependency->{name}, for which no description is supplied");
+	  TuningManager::TuningManager::Log::addErrorLog("$tableName has an internalDependency on $dependency->{name}, for which no description is supplied.");
+	  TuningManager::TuningManager::Log::addErrorLog("    note 1: the check is case-sensitive; is \"$dependency->{name}\" capitalized correctly?");
+	  TuningManager::TuningManager::Log::addErrorLog("    note 2: if $dependency->{name} is an ancillary table, then the internalDependency should reference not it but the tuning table it belongs to");
 	  $undefinedInternal = 1;
 	} else {
 	  # add object to list of internal dependencies
