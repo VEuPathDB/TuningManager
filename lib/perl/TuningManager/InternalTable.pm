@@ -707,7 +707,8 @@ SQL
   my $stmt = $dbh->prepare($sql);
   my $grantRtn = $stmt->execute();
   if (!$grantRtn) {
-    addErrorLog("Failure on GRANT for new table:" . $dbh->errstr . "\n");
+    addErrorLog("GRANT SELECT on new table fails with error " . $dbh->errstr . "\n");
+    addErrorLog("check that $tuningTableName has a CREATE TABLE statement that includes the suffix macro, \"&1\", and (for a prefix-enabled table) the prefix macro, \"&prefix\"");
     return 0;
   }
   $stmt->finish();
