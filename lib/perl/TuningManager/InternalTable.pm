@@ -865,7 +865,7 @@ sub getColumnInfo {
 	my $queryString = $source->{query}[0];
 	$tempTable = $self->{schema} . "." . 'UnionizerTemp';
 	$table = $tempTable;
-	runSql($dbh, 'create table ' . $tempTable . ' as ' . $queryString, 1);
+	runSql($dbh, 'create table ' . $tempTable . ' as ' . $queryString, $self->{debug});
 	$froms[$sourceNumber] = '(' . $queryString . ')';
       } else {
 	$table = $union->{name} if !$table;
