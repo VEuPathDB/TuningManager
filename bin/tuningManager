@@ -281,6 +281,11 @@ eval {
   my @tableList;
   my $tableParamCount = 0;
   if ($tables) {
+    my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
+    if ($downstreamTables) {
+      TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependencies: \"$downstreamTables\"");
+      $tables = $tables . "," . $downstreamTables;
+    }
     @tableList = split(/,/, $tables);
     $tableParamCount = scalar(@tableList);
   } else {
@@ -785,4 +790,31 @@ sub pluralize {
     unless $pluralName;
 
   return ($quantity == 1) ? $name : $pluralName;
+}
+
+sub getDownstreamTables {
+  my ($listedTablesString, $tuningTableRef) = @_;
+
+  my %tuningTables = %$tuningTableRef;
+  my (%listedTables, %downstreamTables, @rebuildList);
+  foreach my $table (split(/,/, $listedTablesString)) {
+    $listedTables{$table} = 1;
+    push(@rebuildList, $table);
+  }
+
+  while (@rebuildList) {
+    my $tableToRebuild = pop(@rebuildList);
+    # addLog("    looking downstream of table \"" . $tableToRebuild . "\"");
+    foreach my $tuningTable (keys(%tuningTables)) {
+      next if $listedTables{$tuningTable} or $downstreamTables{$tuningTable};
+      foreach my $dependency (@{$tuningTables{$tuningTable}->getInternalDependencies()}) {
+	if ($dependency->getName() eq $tableToRebuild) {
+	  # addLog("    has a dependency in " . $tuningTable);
+	  $downstreamTables{$tuningTable} = 1;
+	  push(@rebuildList, $tuningTable);
+	}
+      }
+    }
+  }
+  return join(",", keys(%downstreamTables));
 }
