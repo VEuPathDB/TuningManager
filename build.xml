@@ -6,24 +6,10 @@
 
   <target name="FgpUtil-Installation">
     <ant antfile="../FgpUtil/build.xml" target="FgpUtil-Installation">
-      <property name="project" value="FgpUtil"/>
-      <property name="version" value=""/>
+      <property name="project" value="FgpUtil" />
+      <property name="version" value="" />
     </ant>
-  </target>  
-
-  
-  <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
-  <!-- oooooooooooooooooooooooooo    Checkout    oooooooooooooooooooooooooo -->
-  <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
-
-  <target name="TuningManager-ChildCheckout" />
-  
-  
-  <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
-  <!-- oooooooooooooooooooooooooo    Update    oooooooooooooooooooooooooo -->
-  <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
-
-  <target name="TuningManager-ChildUpdate" />
+  </target>
 
 
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
@@ -32,15 +18,15 @@
 
   <target name="TuningManager-Installation" depends="FgpUtil-Installation">
     <ant target="defaultComponentInstall">
-        <property name="project" value="TuningManager"/>
-        <property name="component" value=""/>
+      <property name="project" value="TuningManager" />
+      <property name="component" value="" />
     </ant>
-</target>  
-   
+  </target>
+
 
   <!-- oooooooooooooooooo  Installation Postprocess  ooooooooooooooooooooo -->
 
-  <target name="TuningManager-Installation-postprocess"/>
+  <target name="TuningManager-Installation-postprocess" />
 
   <!-- ooooooooooooooooooooooo  Install Components  ooooooooooooooooooooooo -->
 
@@ -49,7 +35,7 @@
   <!-- oooooooooooooooooooooooooooo  Release  ooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
-  <target name="TuningManager-Release"/>
+  <target name="TuningManager-Release" />
 
 </project>
 
