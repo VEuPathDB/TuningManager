@@ -280,11 +280,13 @@ eval {
   # check (and potentially update) every tuning table
   my @tableList;
   my $tableParamCount = 0;
-  if ($tables && !$prefix) {
-    my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
-    if ($downstreamTables) {
-      TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependencies: \"$downstreamTables\"");
-      $tables = $tables . "," . $downstreamTables;
+  if ($tables) {
+    if (!$prefix) {
+      my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
+      if ($downstreamTables) {
+	TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependencies: \"$downstreamTables\"");
+	$tables = $tables . "," . $downstreamTables;
+      }
     }
     @tableList = split(/,/, $tables);
     $tableParamCount = scalar(@tableList);
