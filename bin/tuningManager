@@ -284,7 +284,7 @@ eval {
     if (!$prefix) {
       my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
       if ($downstreamTables) {
-	TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependencies: \"$downstreamTables\"");
+	TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependent tables: \"$downstreamTables\"");
 	$tables = $tables . "," . $downstreamTables;
       }
     }
