@@ -283,6 +283,7 @@ eval {
   my @tableList;
   my $tableParamCount = 0;
   if ($tables) {
+    $tables =~ s/ //g;
     if (!$prefix && !$skipDownstreamTables) {
       my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
       if ($downstreamTables) {
