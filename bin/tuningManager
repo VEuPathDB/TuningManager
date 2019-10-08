@@ -36,7 +36,8 @@ my $noArgs = !@ARGV; # check for no arguments now, before GetOptions consumes @A
 
 my ($configFile, $propFile, $instance, $schema, $password, $tables,
     $doUpdate, $debug, $notifyEmail, $cleanupWarnOnly, $cleanupAge, $forceUpdate,
-    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter, $purgeOrphanTables);
+    $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter,
+    $purgeOrphanTables, $skipDownstreamTables);
 
 GetOptions("configFile=s" => \$configFile,
            "propFile=s" => \$propFile,
@@ -55,6 +56,7 @@ GetOptions("configFile=s" => \$configFile,
            "alwaysUpdate!" => \$alwaysUpdateAll,
            "forDatasetPresenter:i" => \$forDatasetPresenter,
            "purgeOrphanTables!" => \$purgeOrphanTables,
+           "skipDownstreamTables!" => \$skipDownstreamTables,
 	  );
 
 TuningManager::TuningManager::Log::setLogfile($logfile);
@@ -280,11 +282,14 @@ eval {
   # check (and potentially update) every tuning table
   my @tableList;
   my $tableParamCount = 0;
-  if ($tables && !$prefix) {
-    my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
-    if ($downstreamTables) {
-      TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependencies: \"$downstreamTables\"");
-      $tables = $tables . "," . $downstreamTables;
+  if ($tables) {
+    $tables =~ s/ //g;
+    if (!$prefix && !$skipDownstreamTables) {
+      my $downstreamTables = getDownstreamTables($tables, \%tuningTables);
+      if ($downstreamTables) {
+	TuningManager::TuningManager::Log::addLog("augmenting table list with downstream dependent tables: \"$downstreamTables\"");
+	$tables = $tables . "," . $downstreamTables;
+      }
     }
     @tableList = split(/,/, $tables);
     $tableParamCount = scalar(@tableList);
