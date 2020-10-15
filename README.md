@@ -1,5 +1,13 @@
 # TuningManager
-Engine to generate denormalized tables in the application database for a genomic website.
+An engine to generate denormalized "performance tuned" tables in an RDBMS.  Uses a dependency tree defined in XML that specifies, for each generated denormalized table, what are the regular and tuning tables that it depends on.  The [schema for the XML](lib/rng/tuningManager.rng) is defined using [RNG](https://relaxng.org/tutorial-20011203.html). Stores tracking data in the target RDBMS used to determine which denormalized tables are stale.  The denormalized tables are created with a suffix in their name, indicating the version of the table.  A view (alias) is used to point to the latest version of the denormalized table.  This naming system allows the TuningManager to be run nightly, seeking to refresh stale denormalized tables, without disrupting use of the RDBMS.
+
+## Dependencies
+ + Perl 5
+ + [Relax RNG](https://relaxng.org/tutorial-20011203.html)
+ + Internal dependencies specified in [build.xml](build.xml)
+ 
+## Install
+`bld TuningManager`
 
 ## Usage
 ```
