@@ -93,6 +93,8 @@ eval {
                                schema => 1,
                                housekeepingSchema => 1,
                                logTable => 1,
+                               apolloUserId => 1,
+                               apolloPassword => 1,
                               );
     my $badProp;
     foreach my $foundProp (keys(%{$props})) {
