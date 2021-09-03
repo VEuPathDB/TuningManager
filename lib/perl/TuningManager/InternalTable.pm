@@ -170,6 +170,8 @@ sub getState {
     $prefix = undef;
   }
 
+  my $defString = $self->getDefString();
+
   # check if the definition is different (or none is stored)
   if (!$self->{dbDef}) {
     addLog("    no TuningTable record exists in database for $self->{name} -- update needed.");
@@ -190,7 +192,12 @@ sub getState {
 
   # check internal dependencies
   foreach my $dependency (@{$self->getInternalDependencies()}) {
-    addLog("    depends on tuning table " . $dependency->getName());
+    my $dependencyName = $dependency->getName();
+    addLog("    depends on tuning table " . $dependencyName);
+
+    unless ($defString =~ /$dependencyName/i ) {
+      addLog("        WARNING: tuning table $self->{name} declares a dependency on tuning table $dependencyName, but does not appear to reference it");
+    }
 
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
@@ -213,7 +220,13 @@ sub getState {
 
   # check external dependencies
   foreach my $dependency (@{$self->getExternalDependencies()}) {
-    addLog("    depends on external table " . $dependency->getName());
+    my $dependencyName = $dependency->getName();
+    addLog("    depends on external table \"$dependencyName\"");
+
+    unless ($defString =~ /$dependencyName/i ) {
+      addLog("        WARNING: tuning table $self->{name} declares a dependency on external table $dependencyName, but does not appear to reference it");
+    }
+
     if ($dependency->getTimestamp() gt $self->{lastCheck}) {
       $needUpdate = 1;
       addLog("    $self->{name} (creation timestamp: " . $self->getTimestamp() .
