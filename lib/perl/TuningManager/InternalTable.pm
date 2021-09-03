@@ -196,7 +196,7 @@ sub getState {
     addLog("    depends on tuning table " . $dependencyName);
 
     unless ($defString =~ /$dependencyName/i ) {
-      addLog("        WARNING: tuning table $self->{name} declares a dependency on tuning table $dependencyName, but does not appear to reference it");
+      addLog("        WARNING: tuning table $self->{name} declares a dependency on the tuning table $dependencyName, but does not appear to reference it");
     }
 
     # increase log-file indentation for recursive call
