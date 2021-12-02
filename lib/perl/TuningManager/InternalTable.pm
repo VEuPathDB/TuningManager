@@ -158,7 +158,8 @@ sub getState {
 
   return $self->{state} if defined $self->{state};
 
-  addLog("checking $self->{name}");
+  addLog("checking $self->{name}  (creation timestamp: " . $self->getTimestamp() .
+             ", last_check: $self->{lastCheck})");
 
   my $needUpdate;
   my $broken;
