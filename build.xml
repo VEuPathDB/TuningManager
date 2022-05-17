@@ -1,16 +1,10 @@
-<project name="TuningManager" default="Installation" basedir=".">
+<project name="TuningManager" basedir=".">
 
   <!-- ooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooo  Dependencies  oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
-  <target name="FgpUtil-Installation">
-    <ant antfile="../FgpUtil/build.xml" target="FgpUtil-Installation">
-      <property name="project" value="FgpUtil" />
-      <property name="version" value="" />
-    </ant>
-  </target>
-
+  <import file="${projectsDir}/FgpUtil/build.xml" />
 
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooo  Installation  oooooooooooooooooooooooooo -->
@@ -23,20 +17,6 @@
     </ant>
   </target>
 
-
-  <!-- oooooooooooooooooo  Installation Postprocess  ooooooooooooooooooooo -->
-
-  <target name="TuningManager-Installation-postprocess" />
-
   <!-- ooooooooooooooooooooooo  Install Components  ooooooooooooooooooooooo -->
 
-
-  <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
-  <!-- oooooooooooooooooooooooooooo  Release  ooooooooooooooooooooooooooooo -->
-  <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
-
-  <target name="TuningManager-Release" />
-
 </project>
-
-
