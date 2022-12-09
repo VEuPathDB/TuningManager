@@ -10,7 +10,6 @@ use File::Basename;
 use TuningManager::TuningManager::InternalTable;
 use TuningManager::TuningManager::ExternalTable;
 use TuningManager::TuningManager::ExternalTuningTable;
-use TuningManager::TuningManager::TuningIndex;
 use TuningManager::TuningManager::Log qw(addLog addErrorLog addLogPreamble);
 use TuningManager::TuningManager::TableSuffix;
 use TuningManager::TuningManager::Utils;
@@ -262,29 +261,6 @@ eval {
 
   die "graph of tuning-table dependencies must be acyclic"
     if ($dependencyCycle);
-
-  # indexes
-  TuningManager::TuningManager::Log::addLogBanner("Checking indexes");
-  my $indexesConfigured;
-  my $missingIndexes;
-  foreach my $tuningIndex (@{$config->{tuningIndex}}) {
-
-    $indexesConfigured++;
-    my $indexObject =
-      TuningManager::TuningManager::TuningIndex->
-        new($tuningIndex->{name},
-          $tuningIndex->{table},
-          $tuningIndex->{content},
-          $dbh);
-
-    if (!$indexObject->exists()) {
-      $missingIndexes++;
-      TuningManager::TuningManager::Log::addLog("must " . $indexObject->getCreateStatement());
-
-      $indexObject->create($dbh)
-        if $doUpdate;
-    }
-  }
 
   # tables
   TuningManager::TuningManager::Log::addLogBanner("Checking whether tuning tables are up to date");
