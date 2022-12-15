@@ -132,7 +132,7 @@ SQL
       $sql = <<SQL;
         update $housekeepingSchema.TuningMgrExternalDependency$dblink
         set (max_mod_date, timestamp, row_count) =
-          (select to_date('$max_mod_date', 'yyyy-mm-dd hh24:mi:ss'), now(), $row_count)
+          (select to_timestamp('$max_mod_date', 'yyyy-mm-dd hh24:mi:ss'), now(), $row_count)
         where name = upper('$self->{name}')
 SQL
     } else {
@@ -141,7 +141,7 @@ SQL
       $sql = <<SQL;
         insert into $housekeepingSchema.TuningMgrExternalDependency$dblink
                     (name, max_mod_date, timestamp, row_count)
-        select upper('$self->{name}'), to_date('$max_mod_date', 'yyyy-mm-dd hh24:mi:ss'), now(), $row_count
+        select upper('$self->{name}'), to_timestamp('$max_mod_date', 'yyyy-mm-dd hh24:mi:ss'), now(), $row_count
 SQL
     }
 

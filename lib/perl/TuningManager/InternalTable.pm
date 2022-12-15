@@ -450,10 +450,10 @@ sub update {
     last if $updateError;
 
     my $commandLine = $program->{commandLine}
-      . " -instance " . $self->{instance}
-      . " -propfile " . $self->{propfile}
-      . " -schema " . $self->{schema}
-      . " -suffix " . $suffix
+      . " -instance '" . $self->{instance} . "'"
+      . " -propfile '" . $self->{propfile} . "'"
+      . " -schema '" . $self->{schema} . "'"
+      . " -suffix '" . $suffix . "'"
       . " -prefix '" . $prefix . "'"
       . " -filterValue '" . $filterValue . "'"
       . $debug
@@ -595,7 +595,7 @@ SQL
   my $sql = <<SQL;
        INSERT INTO $housekeepingSchema.TuningTable
           (name, timestamp, definition, status, last_check)
-       VALUES (?, to_date(?, 'yyyy-mm-dd hh24:mi:ss'), ?, 'up-to-date', to_date(?, 'yyyy-mm-dd hh24:mi:ss'))
+       VALUES (?, to_timestamp(?, 'yyyy-mm-dd hh24:mi:ss'), ?, 'up-to-date', to_timestamp(?, 'yyyy-mm-dd hh24:mi:ss'))
 SQL
 
   my $stmt = $dbh->prepare($sql);
@@ -761,18 +761,20 @@ SQL
   my $viewRtn = $dbh->do($sql);
 
   if (defined $viewRtn) {
-    if ($purgeObsoletes && $oldTable) {
-      addLog("    purging obsolete table " . $oldTable);
-      $dbh->do("DROP TABLE $oldTable") or addErrorLog("\n" . $dbh->errstr . "\n");
-    } else {
-      # . . . or just mark it obsolete
-      my $sql = <<SQL;
-      INSERT INTO $housekeepingSchema.ObsoleteTuningTable (name, timestamp)
-      VALUES ($oldTable , now())
+    if ($oldTable){
+      if ($purgeObsoletes) {
+        addLog("    purging obsolete table " . $oldTable);
+        $dbh->do("DROP TABLE $oldTable") or addErrorLog("\n" . $dbh->errstr . "\n");
+      } else {
+        # . . . or just mark it obsolete
+        my $sql = <<SQL;
+         INSERT INTO $housekeepingSchema.ObsoleteTuningTable (name, timestamp)
+         VALUES ($oldTable , now())
 SQL
-      my $stmt = $dbh->prepare($sql);
-      $stmt->execute() or addErrorLog("\n" . $dbh->errstr . "\n" . $stmt->{sql});
-      $stmt->finish();
+        my $stmt = $dbh->prepare($sql);
+        $stmt->execute() or addErrorLog("\n" . $dbh->errstr . "\n" . $stmt->{sql});
+        $stmt->finish();
+      }
     }
   } else{
     addErrorLog("\n" . $dbh->errstr . "\n");
@@ -934,7 +936,7 @@ sub setStatus {
        update $housekeepingSchema.TuningTable
        set status = ?,
            check_os_user = ?,
-           last_check = to_date(?, 'yyyy-mm-dd hh24:mi:ss')
+           last_check = to_timestamp(?, 'yyyy-mm-dd hh24:mi:ss')
        where lower(name) = lower(?)
 SQL
 
@@ -996,11 +998,11 @@ sub matchesPredecessor {
 sub tablesDiffer {
   my ($dbh, $table1, $table2, $rowCount) = @_;
 
-  my $intersectQuery = "SELECT count(1) FROM (SELECT * FROM ? INTERSECT SELECT * FROM ?)";
+  my $intersectQuery = "SELECT count(1) FROM (SELECT * FROM $table1 INTERSECT SELECT * FROM $table2) t1";
   $dbh->{PrintError} = 0;
   my $stmt = $dbh->prepare($intersectQuery) or addLog("\n" . $dbh->errstr . "\n");
 
-  if (!$stmt->execute($table1, $table2)) {
+  if (!$stmt->execute()) {
     addLog("\n" . $dbh->errstr . "\n");
     $dbh->{PrintError} = 1;
     return 1;
@@ -1010,7 +1012,6 @@ sub tablesDiffer {
 
   $stmt->finish();
   $dbh->{PrintError} = 1;
-  return $intersectCount != $rowCount;
 }
 
 
