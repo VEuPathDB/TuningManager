@@ -3,7 +3,6 @@ package TuningManager::TuningManager::Utils;
 
 use DBI;
 use TuningManager::TuningManager::Log;
-use XML::Simple;
 
 sub sqlBugWorkaroundDo {
 
@@ -93,21 +92,6 @@ sub sqlBugWorkaroundExecute {
     or ($attempts == $SQL_RETRIES);
 
   return $sqlReturn;
-}
-
-sub getDbLoginInfo {
-  my ($instance, $propFile, $username, $password) = @_;
-  my $props;
-
-  if ($propFile) {
-    my $simple = XML::Simple->new();
-    $props = $simple->XMLin($propFile);
-  }
-
-  $password = $props->{password} if !$password;
-  $username = $props->{tuningSchema} if !$username;
-
-  return ($instance, $username, $password);
 }
 
 sub getDbHandle {
