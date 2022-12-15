@@ -296,7 +296,7 @@ eval {
   cleanup($dbh, $cleanupAge, $cleanupWarnOnly);
 
   # summary
-  logSummary(\%tuningTables, $tableParamCount, $doUpdate, $indexesConfigured, $missingIndexes);
+  logSummary(\%tuningTables, $tableParamCount, $doUpdate);
 
   releaseLockForUpdate() if !$prefix;
 
@@ -671,7 +671,7 @@ SQL
 }
 
 sub logSummary {
-  my ($tuningTableRef, $tableParamCount, $doUpdate, $indexesConfigured, $missingIndexes) = @_;
+  my ($tuningTableRef, $tableParamCount, $doUpdate) = @_;
 
   my %tuningTables = %$tuningTableRef;
 
@@ -735,18 +735,6 @@ sub logSummary {
       }
       addLogPreamble(" ");
     }
-  }
-
-  if (!$indexesConfigured) {
-    addLogPreamble("No tuningIndex entities were defined in the config file");
-  } elsif ($missingIndexes) {
-    addLogPreamble($missingIndexes . " of the "
-      . $indexesConfigured
-      . " indexes configured were found to be missing");
-  } else {
-    addLogPreamble("All "
-      . $indexesConfigured
-      . " indexes were found to exist.");
   }
 }
 
