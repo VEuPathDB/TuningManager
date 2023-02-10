@@ -95,6 +95,7 @@ eval {
       logTable => 1,
       apolloUserId => 1,
       apolloPassword => 1,
+      ncbiApiKey => 1,
     );
     my $badProp;
     foreach my $foundProp (keys(%{$props})) {
