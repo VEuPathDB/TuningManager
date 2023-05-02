@@ -697,7 +697,7 @@ SQL
 
   $stmt->execute();
   while (my ($index) = $stmt->fetchrow_array()) {
-    TuningManager::TuningManager::Log::addErrorLog("index \"$index\" is unusable");
+    TuningManager::TuningManager::Log::addLog("WARNING: index \"$index\" is unusable");
   }
   $stmt->finish();
 }
