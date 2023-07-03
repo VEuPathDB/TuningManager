@@ -508,6 +508,20 @@ sub update {
   }
 
   if ($unchanged){
+    addLog("dropping unneeded new version(s)");
+
+    # drop unused main table
+    if (!$dbh->do("drop table " . $self->{name} . $suffix)) {
+      addErrorLog("error dropping unneeded new tuning table:" . $dbh->errstr);
+    }
+
+    # drop unused ancillary tables
+    foreach my $ancillary (@{$self->{ancillaryTables}}) {
+      if (!$dbh->do("drop table " . $ancillary->{name} . $suffix)) {
+	addErrorLog("error dropping unneeded new ancillary table:" . $dbh->errstr);
+      }
+    }
+
     return "up-to-date";
   } else {
     # publish main table
