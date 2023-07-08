@@ -486,9 +486,12 @@ sub update {
   $self->dropIntermediateTables($dbh, $prefix, 'warn on nonexistence');
 
   my $buildDuration = time - $startTime;
+
+  my $tableSize = $self->getTableSize($dbh, $suffix);
   my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name} . $suffix, $prefix);
   addLog("    $buildDuration seconds to rebuild tuning table "
-                                                 . $self->{name} . " with record count of " . $recordCount);
+	 . $self->{name} . " with record count of " . $recordCount
+         . " and size of " . $tableSize . " (" . $tableSize / (1024 * 1024) . " MB)");
 
   if ($maxRebuildMinutes) {
     addErrorLog("table rebuild took longer than $maxRebuildMinutes minute maximum.")
@@ -1048,6 +1051,48 @@ sub tablesDiffer {
   $stmt->finish();
   $dbh->{PrintError} = 1;
   return ($intersectCount == $rowCount) ? 0 : 1;
+}
+
+sub getTableSize {
+  my ($self, $dbh, $suffix) = @_;
+
+  my $stmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
+    with the_table
+         as (select upper(?) as name
+             from dual)
+    select sum(bytes) as total_size
+    from (  select segment_type, segment_name, bytes
+            from user_segments, the_table
+            where segment_type = 'TABLE'
+              and segment_name = the_table.name
+          union all
+            select segment_type, segment_name, bytes
+            from user_segments
+            where segment_type = 'INDEX'
+              and segment_name
+                  in (select index_name
+                      from user_indexes, the_table
+                       where table_name = the_table.name)
+         )
+SQL
+
+  my $total_space;
+  my $table_name;
+
+  $table_name = $self->{name} . $suffix;
+  $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
+  ($total_space) = $stmt->fetchrow_array();
+  $stmt->finish();
+
+  foreach my $ancillary (@{$self->{ancillaryTables}}) {
+    $table_name = $ancillary->{name} . $suffix;
+    $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
+    my ($space) = $stmt->fetchrow_array();
+    $stmt->finish();
+    $total_space += $space;
+  }
+
+  return $total_space;
 }
 
 sub getIntersectQuery {
