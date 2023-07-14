@@ -736,7 +736,7 @@ sub logSummary {
     addLogPreamble("\n");
     addLogPreamble(sprintf("%4d ", $tableCount) . pluralize($tableCount, "table") . " defined in XML");
     addLogPreamble(sprintf("%4d ", $tableParamCount) . pluralize($tableParamCount, "table")
-                   . " named on command line with -tables parameter")
+                   . " named on command line with -tables parameter (or added as downstream dependencies)")
 	if $tableParamCount;
     addLogPreamble(sprintf("%4d ", $upToDateCount) . pluralize($upToDateCount, "table") . " up to date");
     addLogPreamble(sprintf("%4d ", $neededUpdateCount) . pluralize($neededUpdateCount, "table")

@@ -261,7 +261,7 @@ SQL
   }
 
   if ($self->{alwaysUpdate}) {
-    addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
+    addLog("    " . $self->{name} . " must be updated because has the alwaysUpdate attribute.");
     $needUpdate = 1;
   }
 
@@ -506,8 +506,9 @@ sub update {
     $unchanged = $self->matchesPredecessor($suffix, $dbh);
     my $compareDuration = time - $startCompare;
     addLog("    $compareDuration seconds to compare " . $self->{name}
-	   . " (and any ancillary tables) with previous version. returned unchanged flag of: "
-	   . $unchanged);
+	   . " (and any ancillary tables) with previous version. Table(s) DID "
+           . ($unchanged ? "" : "NOT ")
+	   . "change.");
   }
 
   if ($unchanged){
