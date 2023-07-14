@@ -507,7 +507,7 @@ sub update {
     my $compareDuration = time - $startCompare;
     addLog("    $compareDuration seconds to compare " . $self->{name}
 	   . " (and any ancillary tables) with previous version. Table(s) DID "
-           . ($unchanged ? "" : "NOT ")
+           . ($unchanged ? "NOT " : "")
 	   . "change.");
   }
 
