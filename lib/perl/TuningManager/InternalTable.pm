@@ -515,13 +515,13 @@ sub update {
     addLog("dropping unneeded new version(s)");
 
     # drop unused main table
-    if (!$dbh->do("drop table " . $self->{name} . $suffix)) {
+    if (!$dbh->do("drop table " . $self->{name} . $suffix . " purge")) {
       addErrorLog("error dropping unneeded new tuning table:" . $dbh->errstr);
     }
 
     # drop unused ancillary tables
     foreach my $ancillary (@{$self->{ancillaryTables}}) {
-      if (!$dbh->do("drop table " . $ancillary->{name} . $suffix)) {
+      if (!$dbh->do("drop table " . $ancillary->{name} . $suffix . " purge")) {
 	addErrorLog("error dropping unneeded new ancillary table:" . $dbh->errstr);
       }
     }
@@ -709,7 +709,7 @@ sub dropIntermediateTables {
     addLog("    must drop intermediate table $prefix$intermediate->{name}");
 
     my $sql = <<SQL;
-       drop table $prefix$intermediate->{name}
+       drop table $prefix$intermediate->{name} purge
 SQL
 
     $dbh->{PrintError} = 0;
@@ -802,7 +802,7 @@ SQL
   # drop obsolete table, if we're doing that (and it exists)
   if (defined $synonymRtn && $purgeObsoletes && $oldTable && $tableExists) {
     addLog("    purging obsolete table " . $oldTable);
-    if (!$dbh->do("drop table " . $oldTable)) {
+    if (!$dbh->do("drop table " . $oldTable . " purge")) {
       my $message;
       if ($dbh->errstr =~ /ORA-02449/) {
 	$message = "\n" . $dbh->errstr . "\n\nNOTE: to avoid this error, all foreign-key constraints should be dropped on tuning tables once they are loaded, BEFORE they are put live.\n";
@@ -943,7 +943,7 @@ SQL
       }
       $stmt->finish();
 
-      runSql($dbh, 'drop table ' . $tempTable) if ($tempTable);
+      runSql($dbh, 'drop table ' . $tempTable . ' purge') if ($tempTable);
     }
 
   return (\%coltype, \@columns, \%columnSet, $sourceNumber, \@froms);
