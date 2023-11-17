@@ -206,6 +206,7 @@ SQL
 
     $viewText =~ m/[.\r\n]*\bfrom\b\s*(\w*)\.(\w*)[.\r\n]*/i;
     $schema = $1; $table = $2;
+    TuningManager::TuningManager::Log::addErrorLog("\nCan't find VIEW schema or table.  View def: $viewText\n") unless $schema && $table;
   }
 
   # check for a trigger
