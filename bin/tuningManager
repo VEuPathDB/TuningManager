@@ -35,7 +35,7 @@ my $noArgs = !@ARGV; # check for no arguments now, before GetOptions consumes @A
 
 my ($configFile, $propFile, $instance, $schema, $username, $password, $tables,
   $doUpdate, $debug, $notifyEmail, $cleanupWarnOnly, $cleanupAge, $forceUpdate,
-  $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter,
+  $maxWait, $logfile, $prefix, $filterValue, $macrosString, $alwaysUpdateAll, $forDatasetPresenter,
   $purgeOrphanTables, $skipDownstreamTables, $target);
 
 GetOptions("configFile=s" => \$configFile,
@@ -51,8 +51,9 @@ GetOptions("configFile=s" => \$configFile,
   "cleanupWarnOnly!" => \$debug,
   "maxWait=s" => \$maxWait,
   "prefix=s" => \$prefix,
-  "target=s" => \$target,
   "filterValue=s" => \$filterValue,
+  "macros=s" => \$macrosString, 
+  "target=s" => \$target,
   "alwaysUpdate!" => \$alwaysUpdateAll,
   "forDatasetPresenter:i" => \$forDatasetPresenter,
   "purgeOrphanTables!" => \$purgeOrphanTables,
@@ -73,6 +74,8 @@ TuningManager::TuningManager::Log::addErrorLog("parameter error: \"configFile\" 
 TuningManager::TuningManager::Log::addErrorLog("the -forceUpdate and -purgeOrphanTables must not be used together")
   if ($forceUpdate && $purgeOrphanTables);
 &usage unless ($instance && $propFile && $configFile);
+
+my $macros = parseMacrosString($macrosString) if $macrosString;
 
 exit if ($noArgs); # don't send a log email if they only want usage
 
@@ -292,7 +295,7 @@ eval {
       next;
     }
 
-    my $state = $tuningTables{$table}->getState($doUpdate, $dbh, !$cleanupAge, $prefix, $filterValue);
+    my $state = $tuningTables{$table}->getState($doUpdate, $dbh, !$cleanupAge, $prefix, $filterValue, $macros);
   }
 
   # cleanup
@@ -344,8 +347,8 @@ Usage: tuningManager -configFile <configXmlPath> -propFile <filename>
                      [ -tables <list> ] [ -doUpdate ] [ -forceUpdate ]
                      [ -notifyEmail <emailAddressList> ] [ -debug ]
                      [ -cleanupWarnOnly ] [ -cleanupAge <days> ] [ -purgeOrphanTables ]
-                     [ -maxWait <hours> ] [ -prefix <prefix> ] [ -filterValue <value> ] [ -target <value> ]
-                     [ -alwaysUpdate ]
+                     [ -maxWait <hours> ] [ -prefix <prefix> ] [ -filterValue <value> ] [ -macros <macros> ]
+                     [ -target <value> ] [ -alwaysUpdate ]
                      [ -forDatasetPresenter <1> ]
 
 options:
@@ -365,6 +368,9 @@ options:
   prefix              create tuning tables and synonyms with supplied prefix, by substituting this value
                       for any occurrances of the "&prefix" macro
   filterValue         substitute this value for any occurences in the XML of the "&filterValue" macro
+  macros              a semicolon delimited list of arbitrary macros to substitute into <sql> and <perl> blocks.  
+                      Of the form, eg: "PROJECT_ID=ToxoDB; ORG_ABBREV=tgonME49".
+                      Macro targets in <sql> or <perl> look like this, eg:  &PROJECT_ID
   target              if set to, say, xxxxx then limit the run to tables with a target=xxxxx attribute in their XML definition
   alwaysUpdate        update every tuning table evaluated
   forDatasetPresenter set if only DatasetPresenter tables are being updated; will return different subject line if run results in errors.
@@ -721,7 +727,7 @@ sub logSummary {
     } else {
       addLogPreamble(" -- tuningManager ran successfully");
     }
-    addLogPreamble(" "); # newline to make summary stand out
+
 
     # list broken tables
     if ($brokenCount) {
@@ -784,4 +790,15 @@ sub getDownstreamTables {
     }
   }
   return join(",", keys(%downstreamTables));
+}
+
+sub parseMacrosString {
+  my ($macrosString) = @_;
+  my @macrosArray = split(/;\s*/, $macrosString);
+  my $macros;
+  foreach my $macroString (@macrosArray) {
+    $macroString =~ /(\S+)\=(\S+)/ or die "Invalid macro string in argument '--macros \"$macrosString\"'\n";
+    $macros->{$1} = $2;
+  }
+  return $macros;
 }

@@ -4,12 +4,13 @@
   <!-- oooooooooooooooooooooooooo  Dependencies  oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
+  <import file="${projectsDir}/FgpUtil/build.xml" />
 
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooo  Installation  oooooooooooooooooooooooooo -->
   <!-- oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo -->
 
-  <target name="TuningManager-Installation">
+  <target name="TuningManager-Installation"  depends="FgpUtil-Installation">
     <ant target="defaultComponentInstall">
       <property name="project" value="TuningManager" />
       <property name="component" value="" />

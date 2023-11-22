@@ -154,7 +154,7 @@ sub getLastCheck {
 }
 
 sub getState {
-  my ($self, $doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue) = @_;
+  my ($self, $doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue, $macros) = @_;
 
   return $self->{state} if defined $self->{state};
 
@@ -202,7 +202,7 @@ sub getState {
 
     # increase log-file indentation for recursive call
     TuningManager::TuningManager::Log::increaseIndent();
-    my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue);
+    my $childState = $dependency->getState($doUpdate, $dbh, $purgeObsoletes, $prefix, $filterValue, $macros);
     TuningManager::TuningManager::Log::decreaseIndent();
 
     if ($childState eq "neededUpdate") {
@@ -279,7 +279,7 @@ SQL
       addErrorLog("attempt to update tuning table " . $self->{name} . ". This table does not have the prefixEnabled attribute, but the tuning manager was run with the -prefix parameter set.");
       $broken = 1;
     } elsif (!$broken) {
-      my $updateResult = $self->update($dbh, $purgeObsoletes, $prefix, $filterValue, $storedDefinitionChange);
+      my $updateResult = $self->update($dbh, $purgeObsoletes, $prefix, $filterValue, $macros, $storedDefinitionChange);
       if ($updateResult eq "broken") {
         $broken = 1;
         $tableStatus = "update failed";
@@ -315,7 +315,7 @@ SQL
 }
 
 sub update {
-  my ($self, $dbh, $purgeObsoletes, $prefix, $filterValue, $storedDefinitionChange) = @_;
+  my ($self, $dbh, $purgeObsoletes, $prefix, $filterValue, $macros, $storedDefinitionChange) = @_;
 
   my $startTime = time;
 
@@ -395,6 +395,9 @@ sub update {
     my $dblink = $self->{dblink};
     $sqlCopy =~ s/&dblink/$dblink/g;
 
+    # substitute optional macros
+    $sqlCopy = substituteMacros($macros, $sqlCopy);
+
     addLog("running sql of length "
       . length($sqlCopy)
       . " to build $self->{name}:\n
@@ -425,6 +428,9 @@ sub update {
     # substitute prefix macro
     $perlCopy =~ s/&prefix/$prefix/g;
     $perlCopy =~ s/&filterValue/$filterValue/g;
+
+    # substitute optional macros
+    $perlCopy = substituteMacros($macros, $perlCopy);
 
     addLog("running perl of length " . length($perlCopy) . " to build $self->{name}::\n$perlCopy")
       if $self->{debug};
@@ -537,6 +543,20 @@ sub update {
 
     return "neededUpdate"
   }
+}
+
+# substitute the macros provided in the $macros hash ref into the string.
+# macro target is of the form "&MACRONAME"
+sub substituteMacros {
+    my ($macros, $string) = @_;
+
+    return $string unless $macros;
+    foreach my $macroName (keys %$macros) {
+      my $target = '&' . $macroName;
+      my $value = $macros->{$macroName};
+      $string =~ s/$target/$value/g;
+    }
+    return $string;
 }
 
 sub getDatabaseTime {
