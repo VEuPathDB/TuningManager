@@ -759,11 +759,11 @@ SQL
   $sql =  <<SQL;
     DO \$\$
     BEGIN
-      CREATE OR REPLACE VIEW $prefix$table AS SELECT * FROM $prefix$table$suffix";
+      CREATE OR REPLACE VIEW $prefix$table AS SELECT * FROM $prefix$table$suffix;
     EXCEPTION
     WHEN SQLSTATE '42P16' THEN
       DROP VIEW $prefix$table;
-      CREATE OR REPLACE VIEW $prefix$table AS SELECT * FROM $prefix$table$suffix";
+      CREATE OR REPLACE VIEW $prefix$table AS SELECT * FROM $prefix$table$suffix;
     END;
     \$\$ LANGUAGE PLPGSQL;
 SQL
