@@ -530,7 +530,7 @@ SQL
     or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   while (my ($table) = $stmt->fetchrow_array()) {
     TuningManager::TuningManager::Log::addLog("Dropping obsolete tuning table $table, which is not listed in $housekeepingSchema.ObsoleteTuningTable.");
-    $dbh->do("DROP TABLE $table")
+    $dbh->do("DROP TABLE $table CASCADE")
       or TuningManager::TuningManager::Log::addErrorLog("\n" . $dbh->errstr . "\n");
   }
   $stmt->finish();
