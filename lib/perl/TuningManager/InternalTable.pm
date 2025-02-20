@@ -261,7 +261,7 @@ SQL
   }
 
   if ($self->{alwaysUpdate}) {
-    addLog("    " . $self->{name} . " has alwaysUpdate attribute.");
+    addLog("    " . $self->{name} . " must be updated because has the alwaysUpdate attribute.");
     $needUpdate = 1;
   }
 
@@ -488,6 +488,8 @@ sub update {
   $self->dropIntermediateTables($dbh, $prefix, 'warn on nonexistence');
 
   my $buildDuration = time - $startTime;
+
+  my $tableSize = $self->getTableSize($dbh, $suffix);
   my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name} . $suffix, $prefix);
   addLog("    $buildDuration seconds to rebuild tuning table "
     . $self->{name} . " with record count of " . $recordCount);
@@ -510,6 +512,20 @@ sub update {
   }
 
   if ($unchanged){
+    addLog("dropping unneeded new version(s)");
+
+    # drop unused main table
+    if (!$dbh->do("drop table " . $self->{name} . $suffix . " purge")) {
+      addErrorLog("error dropping unneeded new tuning table:" . $dbh->errstr);
+    }
+
+    # drop unused ancillary tables
+    foreach my $ancillary (@{$self->{ancillaryTables}}) {
+      if (!$dbh->do("drop table " . $ancillary->{name} . $suffix . " purge")) {
+	addErrorLog("error dropping unneeded new ancillary table:" . $dbh->errstr);
+      }
+    }
+
     return "up-to-date";
   } else {
     # publish main table
@@ -694,7 +710,7 @@ sub dropIntermediateTables {
     addLog("    must drop intermediate table $prefix$intermediate->{name}");
 
     my $sql = <<SQL;
-       drop table $prefix$intermediate->{name}
+       drop table $prefix$intermediate->{name} purge
 SQL
 
     $dbh->{PrintError} = 0;
