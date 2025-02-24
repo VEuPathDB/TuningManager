@@ -492,8 +492,8 @@ sub update {
   my $tableSize = $self->getTableSize($dbh, $suffix);
   my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name} . $suffix, $prefix);
   addLog("    $buildDuration seconds to rebuild tuning table "
-    . $self->{name} . " with record count of " . $recordCount);
-
+    . $self->{name} . " with record count of " . $recordCount
+    . " and total size of " . $tableSize . " (including all indexes and ancillary tables)");
   if ($maxRebuildMinutes) {
     addErrorLog("table rebuild took longer than $maxRebuildMinutes minute maximum.")
       if ($buildDuration > $maxRebuildMinutes * 60)
@@ -515,13 +515,13 @@ sub update {
     addLog("dropping unneeded new version(s)");
 
     # drop unused main table
-    if (!$dbh->do("drop table " . $self->{name} . $suffix . " purge")) {
+    if (!$dbh->do("drop table " . $self->{name} . $suffix)) {
       addErrorLog("error dropping unneeded new tuning table:" . $dbh->errstr);
     }
 
     # drop unused ancillary tables
     foreach my $ancillary (@{$self->{ancillaryTables}}) {
-      if (!$dbh->do("drop table " . $ancillary->{name} . $suffix . " purge")) {
+      if (!$dbh->do("drop table " . $ancillary->{name} . $suffix)) {
 	addErrorLog("error dropping unneeded new ancillary table:" . $dbh->errstr);
       }
     }
@@ -710,7 +710,7 @@ sub dropIntermediateTables {
     addLog("    must drop intermediate table $prefix$intermediate->{name}");
 
     my $sql = <<SQL;
-       drop table $prefix$intermediate->{name} purge
+       drop table $prefix$intermediate->{name}
 SQL
 
     $dbh->{PrintError} = 0;
@@ -790,7 +790,7 @@ SQL
     if ($oldTable){
       if ($purgeObsoletes) {
         addLog("    purging obsolete table " . $oldTable);
-        $dbh->do("DROP TABLE $oldTable") or addErrorLog("\n" . $dbh->errstr . "\n");
+        $dbh->do("DROP TABLE $oldTable CASCADE") or addErrorLog("\n" . $dbh->errstr . "\n");
       } else {
         # . . . or just mark it obsolete
         my $sql = <<SQL;
@@ -1038,6 +1038,33 @@ sub tablesDiffer {
 
   $stmt->finish();
   $dbh->{PrintError} = 1;
+}
+
+sub getTableSize {
+  my ($self, $dbh, $suffix) = @_;
+
+  my $stmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
+SELECT pg_size_pretty(pg_total_relation_size(?))
+SQL
+
+  my $total_space;
+  my $table_name;
+
+  $table_name = $self->{qualifiedName} . $suffix;
+  $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
+  ($total_space) = $stmt->fetchrow_array();
+  $total_space = 0 unless $total_space;
+  $stmt->finish();
+
+  foreach my $ancillary (@{$self->{ancillaryTables}}) {
+    $table_name = $ancillary->{name} . $suffix;
+    $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
+    my ($space) = $stmt->fetchrow_array();
+    $stmt->finish();
+    $total_space += $space;
+  }
+
+  return $total_space;
 }
 
 
