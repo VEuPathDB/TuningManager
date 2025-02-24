@@ -108,7 +108,6 @@ sub getDbHandle {
 
   print "db info:\n  dsn=$instance\n  login=$username\n\n" if $debug;
   $dbh->do("SET search_path TO $schema") or die ("This doesn't quite work");
-  $dbh->do("SET ROLE GUS_W") or die ("Can't switch role to GUS_W");
   return $dbh;
 }
 
