@@ -1058,7 +1058,7 @@ SQL
   $stmt->finish();
 
   foreach my $ancillary (@{$self->{ancillaryTables}}) {
-    $table_name = $ancillary->{name} . $suffix;
+    $table_name = $self->{schema} . "." . $prefix . $ancillary->{name} . $suffix;
     $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
     my ($space) = $stmt->fetchrow_array();
     $stmt->finish();
