@@ -489,7 +489,7 @@ sub update {
 
   my $buildDuration = time - $startTime;
 
-  my $tableSize = $self->getTableSize($dbh, $suffix);
+  my $tableSize = $self->getTableSize($dbh, $suffix, $prefix);
   my ($tableMissing, $recordCount) = getRecordCount($dbh, $self->{name} . $suffix, $prefix);
   addLog("    $buildDuration seconds to rebuild tuning table "
     . $self->{name} . " with record count of " . $recordCount
@@ -1041,7 +1041,7 @@ sub tablesDiffer {
 }
 
 sub getTableSize {
-  my ($self, $dbh, $suffix) = @_;
+  my ($self, $dbh, $suffix, $prefix) = @_;
 
   my $stmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
 SELECT pg_size_pretty(pg_total_relation_size(?))
@@ -1050,7 +1050,8 @@ SQL
   my $total_space;
   my $table_name;
 
-  $table_name = $self->{qualifiedName} . $suffix;
+
+  $table_name = $self->{schema} . "." . $prefix . $name . $suffix;
   $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
   ($total_space) = $stmt->fetchrow_array();
   $total_space = 0 unless $total_space;
