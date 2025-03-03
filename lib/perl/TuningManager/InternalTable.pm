@@ -1051,7 +1051,7 @@ SQL
   my $table_name;
 
 
-  $table_name = $self->{schema} . "." . $prefix . $name . $suffix;
+  $table_name = $self->{schema} . "." . $prefix . $self->{name} . $suffix;
   $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
   ($total_space) = $stmt->fetchrow_array();
   $total_space = 0 unless $total_space;
