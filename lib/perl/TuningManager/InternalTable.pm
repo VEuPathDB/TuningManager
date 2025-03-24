@@ -776,10 +776,12 @@ SQL
     DO \$\$
     BEGIN
       CREATE OR REPLACE VIEW $prefix$table AS SELECT * FROM $prefix$table$suffix;
+      GRANT SELECT ON $prefix$table TO GUS_R";
     EXCEPTION
     WHEN SQLSTATE '42P16' THEN
       DROP VIEW $prefix$table;
       CREATE OR REPLACE VIEW $prefix$table AS SELECT * FROM $prefix$table$suffix;
+      GRANT SELECT ON $prefix$table TO GUS_R";
     END;
     \$\$ LANGUAGE PLPGSQL;
 SQL
