@@ -37,7 +37,7 @@ my $noArgs = !@ARGV; # check for no arguments now, before GetOptions consumes @A
 my ($configFile, $propFile, $instance, $schema, $password, $tables,
     $doUpdate, $debug, $notifyEmail, $cleanupWarnOnly, $cleanupAge, $forceUpdate,
     $maxWait, $logfile, $prefix, $filterValue, $alwaysUpdateAll, $forDatasetPresenter,
-    $purgeOrphanTables, $skipDownstreamTables);
+    $purgeOrphanTables, $skipDownstreamTables, $target);
 
 GetOptions("configFile=s" => \$configFile,
            "propFile=s" => \$propFile,
@@ -52,6 +52,7 @@ GetOptions("configFile=s" => \$configFile,
            "cleanupWarnOnly!" => \$debug,
            "maxWait=s" => \$maxWait,
            "prefix=s" => \$prefix,
+           "target=s" => \$target,
            "filterValue=s" => \$filterValue,
            "alwaysUpdate!" => \$alwaysUpdateAll,
            "forDatasetPresenter:i" => \$forDatasetPresenter,
@@ -151,6 +152,8 @@ eval {
   my %externalTuningTables;
 
   foreach my $tuningTable (@{$config->{tuningTable}}) {
+
+    next if ($target && $tuningTable->{target} ne $target);
 
     $tuningTables{$tuningTable->{name}}
       = TuningManager::TuningManager::InternalTable->

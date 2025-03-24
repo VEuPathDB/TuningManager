@@ -11,6 +11,9 @@
 	    <attribute name="alwaysUpdate" />
 	  </optional>
 	  <optional>
+	    <attribute name="target" />
+	  </optional>
+	  <optional>
 	    <attribute name="prefixEnabled" />
 	  </optional>
 	  <zeroOrMore>
