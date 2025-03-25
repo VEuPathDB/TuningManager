@@ -1046,7 +1046,7 @@ sub getTableSize {
   my ($self, $dbh, $suffix, $prefix) = @_;
 
   my $stmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
-SELECT pg_size_pretty(pg_total_relation_size(?))
+SELECT pg_total_relation_size(?)
 SQL
 
   my $total_space;
@@ -1067,7 +1067,14 @@ SQL
     $total_space += $space;
   }
 
-  return $total_space;
+  my $formatStmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
+SELECT pg_size_pretty(?)
+SQL
+
+  $formatStmt->execute($total_space) or addErrorLog("\n" . $dbh->errstr . "\n");
+  my ($formattedSpace) = $stmt->fetchrow_array();
+
+  return $formattedSpace;
 }
 
 
