@@ -3,7 +3,6 @@ package TuningManager::TuningManager::Utils;
 
 use DBI;
 use TuningManager::TuningManager::Log;
-use XML::Simple;
 
 sub sqlBugWorkaroundDo {
 
@@ -25,12 +24,12 @@ sub sqlBugWorkaroundDo {
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime();
     my $timestamp = sprintf('%02d:%02d:%02d', $hour, $min, $sec);
     TuningManager::TuningManager::Log::addLog("executing sql at $timestamp")
-	if $debug;
+      if $debug;
 
     $sqlReturn = $dbh->do($sql);
 
     TuningManager::TuningManager::Log::addLog("sql returned \"$sqlReturn\"; \$dbh->errstr = \"" . $dbh->errstr . "\"")
-	if $debug;
+      if $debug ;
 
     if (defined $sqlReturn) {
       $thisSqlWorked = 1;
@@ -42,7 +41,7 @@ sub sqlBugWorkaroundDo {
 
   } until $thisSqlWorked
     or ($dbh->errstr !~ /ORA-03135/)
-      or ($attempts == $SQL_RETRIES);
+    or ($attempts == $SQL_RETRIES);
 
   return $sqlReturn;
 }
@@ -67,7 +66,7 @@ sub sqlBugWorkaroundExecute {
     my ($sec,$min,$hour,$mday,$mon,$year) = localtime();
     my $timestamp = sprintf('%02d:%02d:%02d', $hour, $min, $sec);
     TuningManager::TuningManager::Log::addLog("executing sql at $timestamp")
-	if $debug;
+      if $debug;
 
     eval {
       $sqlReturn = $stmt->execute();
@@ -75,10 +74,10 @@ sub sqlBugWorkaroundExecute {
 
     # log any errors inside eval
     TuningManager::TuningManager::Log::addErrorLog($@)
-	if $@;
+      if $@;
 
     TuningManager::TuningManager::Log::addLog("sql returned \"$sqlReturn\"; \$dbh->errstr = \"" . $dbh->errstr . "\"")
-	if $debug;
+      if $debug;
 
     if (defined $sqlReturn) {
       $thisSqlWorked = 1;
@@ -90,40 +89,25 @@ sub sqlBugWorkaroundExecute {
 
   } until $thisSqlWorked
     or ($dbh->errstr !~ /ORA-03135/)
-      or ($attempts == $SQL_RETRIES);
+    or ($attempts == $SQL_RETRIES);
 
   return $sqlReturn;
 }
 
-sub getDbLoginInfo {
-  my ($instance, $propFile, $username, $password) = @_;
-  my $props;
-
-if ($propFile) {
-  my $simple = XML::Simple->new();
-  $props = $simple->XMLin($propFile);
-}
-
-  $password = $props->{password} if !$password;
-  $username = $props->{tuningSchema} if !$username;
-
-  return ($instance, $username, $password);
-}
-
 sub getDbHandle {
-  my ($instance, $username, $password) = @_;
+  my ($instance, $username, $password, $schema) = @_;
   my $props;
 
-  my $dsn = "dbi:Oracle:" . $instance;
+  my $dsn = "dbi:Pg:" . $instance;
   my $dbh = DBI->connect(
-                $dsn,
-                $username,
-                $password,
-                { PrintError => 1, RaiseError => 0}
-                ) or die "Can't connect to the database: $DBI::errstr\n";
-  $dbh->{LongReadLen} = 1000000;
-  $dbh->{LongTruncOk} = 1;
+    $dsn,
+    $username,
+    $password,
+    { PrintError => 1, RaiseError => 0}
+  ) or die "Can't connect to the database: $DBI::errstr\n";
+
   print "db info:\n  dsn=$instance\n  login=$username\n\n" if $debug;
+  $dbh->do("SET search_path TO $schema") or die ("This doesn't quite work");
   return $dbh;
 }
 

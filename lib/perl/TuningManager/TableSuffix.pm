@@ -11,30 +11,23 @@ BEGIN {
   my $suffix;
 
   sub getSuffix {
-
     my ($dbh, $housekeepingSchema) = @_;
-
     if (!defined $suffix) {
-
       my $sql = <<SQL;
-       select $housekeepingSchema.TuningManager_sq.nextval from dual
+       SELECT nextval('$housekeepingSchema.TuningManager_sq')
 SQL
 
       my $stmt = $dbh->prepare($sql);
-      $stmt->execute()
-	or TuningManager::TuningManager::Log::addErrorLog($dbh->errstr);
+      $stmt->execute() or TuningManager::TuningManager::Log::addErrorLog($dbh->errstr);
       ($suffix) = $stmt->fetchrow_array();
       $stmt->finish();
 
-      TuningManager::TuningManager::Log::addLog("    Creating tuning tables with the suffix $suffix");
-
+      TuningManager::TuningManager::Log::addLog("Creating tuning tables with the suffix $suffix");
     }
-
     return $suffix;
   }
 
   sub suffixDefined {
-
     return (defined $suffix);
   }
 }
