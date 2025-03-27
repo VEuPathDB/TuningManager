@@ -540,16 +540,20 @@ sub update {
     # update in-memory creation timestamp
     $self->{timestamp} = $startTimeString;
 
-    # store definition
-    if (!$prefix) {
-      addErrorLog("unable to store table definition")
-        if $self->storeDefinition($dbh, $startTimeString);
-    }
+    # store definition & update the log table, don't do it for prefixed workflow tables
+    unless ($prefix) {
+      $self->storeDefinition($dbh, $startTimeString) or addErrorLog("unable to store table definition");
 
-    # TODO SKIP LOG TABLE FOR THE TIME BEING
-    # TuningManager::TuningManager::Log::logRebuild($dbh, $self->{name}, $buildDuration,
-    #   $self->{instance}, $recordCount, $self->{logTableName}, $self->{housekeepingSchema})
-    #   if !$prefix;
+      TuningManager::TuningManager::Log::logRebuild(
+        $dbh,
+        $self->{name},
+        $buildDuration,
+        $recordCount,
+        $tableSize,
+        $self->{logTableName},
+        $self->{housekeepingSchema}
+      );
+    }
 
     return "neededUpdate"
   }

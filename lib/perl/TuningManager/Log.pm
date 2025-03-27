@@ -190,16 +190,15 @@ sub getProcessInfo {
 }
 
 sub logRebuild {
-  my ($dbh, $name, $buildDuration, $instanceName, $recordCount, $logTableName, $housekeepingSchema) = @_;
+  my ($dbh, $name, $buildDuration, $recordCount, $tableSize, $logTableName, $housekeepingSchema) = @_;
 
   my $suffix = TuningManager::TuningManager::TableSuffix::getSuffix($dbh, $housekeepingSchema);
   my $updater = getProcessInfo();
 
   $dbh->do(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
-insert into $logTableName
-(instance_nickname, name, suffix, updater, timestamp, row_count, build_duration)
-select '$instanceName', '$name', '$suffix', '$updater', sysdate, '$recordCount', '$buildDuration'
-from dual
+INSERT INTO $logTableName
+(db_name, table_name, suffix, updater, timestamp, build_duration_seconds, row_count, table_size)
+SELECT current_database(), '$name', '$suffix', '$updater', localtimestamp, '$buildDuration', '$recordCount', '$tableSize'
 SQL
 
 }
