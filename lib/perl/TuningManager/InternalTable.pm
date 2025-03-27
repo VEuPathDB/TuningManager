@@ -542,7 +542,7 @@ sub update {
 
     # store definition & update the log table, don't do it for prefixed workflow tables
     unless ($prefix) {
-      $self->storeDefinition($dbh, $startTimeString) or addErrorLog("unable to store table definition");
+      $self->storeDefinition($dbh, $startTimeString);
 
       TuningManager::TuningManager::Log::logRebuild(
         $dbh,
@@ -622,6 +622,7 @@ SQL
 
   if (!$stmt->execute($self->{qualifiedName}, $startTimeString, $self->getDefString(), $startTimeString)) {
     addErrorLog("\n" . $dbh->errstr . "\n" . $stmt->{sql});
+    addErrorLog("unable to store table definition");
     return "fail";
   }
 
