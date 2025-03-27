@@ -1072,7 +1072,7 @@ SQL
   }
 
   my $formatStmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
-SELECT pg_size_pretty(?)
+SELECT pg_size_pretty(?::bigint)
 SQL
 
   $formatStmt->execute($total_space) or addErrorLog("\n" . $dbh->errstr . "\n");
