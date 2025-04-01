@@ -1077,7 +1077,7 @@ SELECT pg_size_pretty(?::bigint)
 SQL
 
   $formatStmt->execute($total_space) or addErrorLog("\n" . $dbh->errstr . "\n");
-  my ($formattedSpace) = $stmt->fetchrow_array();
+  my ($formattedSpace) = $formatStmt->fetchrow_array();
 
   return $formattedSpace;
 }
