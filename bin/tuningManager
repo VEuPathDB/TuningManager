@@ -170,6 +170,9 @@ eval {
         $subversionDir, $props->{dblink}, $props->{housekeepingSchema}, $props->{logTable}, $alwaysUpdateAll);
   }
 
+  # dumpDependencyGraph(\%tuningTables);   # uncomment to dump the graph to yaml (STDOUT)
+  # exit;
+
   if ($doUpdate && !$prefix) {
     clearDeadLock();
     checkLockout($maxWait) if $maxWait;
@@ -780,4 +783,44 @@ sub getDownstreamTables {
     }
   }
   return join(",", keys(%downstreamTables));
+}
+
+sub dumpDependencyGraph {
+  my ($tuningTables) = @_;
+
+  my $nodes;
+  foreach my $tableName (keys %$tuningTables) {
+    print STDERR "Processing $tableName\n";
+    $nodes->{$tableName} =  { name=> $tableName } unless $nodes->{$tableName};
+
+    my $dependencies = $tuningTables->{$tableName}->{internalDependencyNames};
+    foreach my $parentName (@$dependencies) {
+      $nodes->{$parentName} = { name => $parentName } unless $nodes->{$parentName};
+      $nodes->{$parentName}->{hasKids} = 1;
+      $nodes->{$tableName}->{parents}->{$parentName} = $nodes->{$parentName};
+    }
+  }
+
+  my $alreadyPrinted = {};
+  foreach my $tableName (keys %$nodes) {
+    # start with leaf nodes
+    printNodes($nodes, $nodes->{$tableName}, $alreadyPrinted) unless $nodes->{$tableName}->{hasKids};
+  }
+}
+
+# print to yaml
+sub printNodes {
+  my ($nodes, $node, $alreadyPrinted) = @_;
+
+  # print parents first
+  my $parents = $node->{parents};
+  foreach my $parentName (keys %$parents) {
+    printNodes($nodes, $nodes->{$parentName}, $alreadyPrinted) unless $alreadyPrinted->{$parentName};
+  }
+
+  print STDOUT $node->{name} . ":\n";
+  foreach my $parentName (keys %$parents) {
+    print STDOUT "  -" . $nodes->{$parentName}->{name} . "\n";
+  }
+  $alreadyPrinted->{$node->{name}} = 1;
 }

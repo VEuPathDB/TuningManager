@@ -1,0 +1,38 @@
+#!/usr/bin/perl
+
+use strict;
+use Data::Dumper;
+use YAML::Tiny;
+
+my ($yamlFile) = @ARGV;
+
+usage() unless $yamlFile;
+
+die "Can't find file $yamlFile\n" unless -e $yamlFile;
+
+my $yaml = YAML::Tiny->read($yamlFile);
+
+print '<workflowGraph name="">' , "\n";
+
+foreach my $tt (@{$yaml->[0]}) {
+  my $name = $tt->{name};
+  print qq(  <step name="$name" stepClass="ApiCommonWorkflow::Main::WorkflowSteps::CreateDenormalizedTable">) . "\n";
+  print qq(    <paramValue name="psqlFile">\$psqlFileDir/$name.psql</paramValue>) . "\n";
+  my $depends = $tt->{depends};
+  foreach my $d (@$depends) {
+    print "    <depends name=\"$d\"/>\n";
+  }
+
+  print "  </step>\n\n";
+
+}
+
+print '<\workflowGraph>' , "\n";
+
+sub usage {
+  die "
+Render a tuning manager graph as reflow XML.  Input is the graph in yaml format, as produced by the dumper in the tuning manager.
+
+Usage: tmGraphToReflow yaml_file
+";
+}
