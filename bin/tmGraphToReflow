@@ -4,7 +4,7 @@ use strict;
 use Data::Dumper;
 use YAML::Tiny;
 
-my ($yamlFile) = @ARGV;
+my ($yamlFile, $organismAbbrev) = @ARGV;
 
 usage() unless $yamlFile;
 
@@ -18,6 +18,7 @@ foreach my $tt (@{$yaml->[0]}) {
   my $name = $tt->{name};
   print qq(  <step name="$name" stepClass="ApiCommonWorkflow::Main::WorkflowSteps::CreateDenormalizedTable">) . "\n";
   print qq(    <paramValue name="psqlFile">\$psqlFileDir/$name.psql</paramValue>) . "\n";
+  print qq(    <paramValue name="organismAbbrev">$organismAbbrev</paramValue>) . "\n";
   my $depends = $tt->{depends};
   foreach my $d (@$depends) {
     print "    <depends name=\"$d\"/>\n";
@@ -33,6 +34,6 @@ sub usage {
   die "
 Render a tuning manager graph as reflow XML.  Input is the graph in yaml format, as produced by the dumper in the tuning manager.
 
-Usage: tmGraphToReflow yaml_file
+Usage: tmGraphToReflow yaml_file [organismAbbrev]
 ";
 }
