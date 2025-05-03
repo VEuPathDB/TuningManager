@@ -170,8 +170,9 @@ eval {
         $subversionDir, $props->{dblink}, $props->{housekeepingSchema}, $props->{logTable}, $alwaysUpdateAll);
   }
 
-  # dumpDependencyGraph(\%tuningTables);   # uncomment to dump the graph to yaml (STDOUT)
-  # exit;
+  dumpPsql(\%tuningTables);   # uncomment to dump the graph to yaml (STDOUT)
+#  dumpDependencyGraph(\%tuningTables);   # uncomment to dump the graph to yaml (STDOUT)
+   exit;
 
   if ($doUpdate && !$prefix) {
     clearDeadLock();
@@ -794,7 +795,8 @@ sub dumpDependencyGraph {
     $nodes->{$tableName} =  { name=> $tableName } unless $nodes->{$tableName};
 
     my $dependencies = $tuningTables->{$tableName}->{internalDependencyNames};
-    foreach my $parentName (@$dependencies) {
+    foreach my $parent (@$dependencies) {
+      my $parentName = $parent->{name};
       $nodes->{$parentName} = { name => $parentName } unless $nodes->{$parentName};
       $nodes->{$parentName}->{hasKids} = 1;
       $nodes->{$tableName}->{parents}->{$parentName} = $nodes->{$parentName};
@@ -818,9 +820,28 @@ sub printNodes {
     printNodes($nodes, $nodes->{$parentName}, $alreadyPrinted) unless $alreadyPrinted->{$parentName};
   }
 
-  print STDOUT $node->{name} . ":\n";
+  print STDOUT "- \n";
+  print STDOUT "  name: " . $node->{name} . "\n";
+  print STDOUT "  depends: \n" if scalar(keys %$parents);
   foreach my $parentName (keys %$parents) {
-    print STDOUT "  -" . $nodes->{$parentName}->{name} . "\n";
+    print STDOUT "    - " . $nodes->{$parentName}->{name} . "\n";
   }
   $alreadyPrinted->{$node->{name}} = 1;
+}
+
+sub dumpPsql {
+  my ($tuningTables) = @_;
+
+  foreach my $tableName (keys %$tuningTables) {
+    print STDERR "Processing table $tableName\n";
+    open(my $fh, '>', "/home/sfischer/psql/$tableName.psql") || die "Can't open $tableName.psql";
+    my $sqls = $tuningTables->{$tableName}->{sqls};
+    foreach my $sql (@$sqls) {
+      $sql =~ s/\&prefix/\:ORG_ABBREV/g;
+      $sql =~ s/\&filter/\:TAXON_ID/g;
+      $sql =~ s/\&1//g;
+      print $fh "$sql;\n\n";
+    }
+    close($fh);
+  }
 }
