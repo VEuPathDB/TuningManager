@@ -2,25 +2,33 @@
 
 use strict;
 use Data::Dumper;
-use YAML::Tiny;
+use YAML qw(LoadFile);
 
-my ($yamlFile, $organismAbbrev) = @ARGV;
+my ($yamlFile, $isOrgSpecific) = @ARGV;
 
 usage() unless $yamlFile;
 
 die "Can't find file $yamlFile\n" unless -e $yamlFile;
 
-my $yaml = YAML::Tiny->read($yamlFile);
+my $pruneMap = readPruneFile();
+
+my $yaml =LoadFile($yamlFile);
 
 print '<workflowGraph name="">' , "\n";
 
-foreach my $tt (@{$yaml->[0]}) {
+foreach my $tt (@$yaml) {
   my $name = $tt->{name};
+  if ($isOrgSpecific) {
+    next unless $pruneMap->{$name} eq 'MO';
+  } else {
+    next unless $pruneMap->{$name} eq 'MG'
+  }
   print qq(  <step name="$name" stepClass="ApiCommonWorkflow::Main::WorkflowSteps::CreateDenormalizedTable">) . "\n";
   print qq(    <paramValue name="psqlFile">\$psqlFileDir/$name.psql</paramValue>) . "\n";
-  print qq(    <paramValue name="organismAbbrev">$organismAbbrev</paramValue>) . "\n";
+  print qq(    <paramValue name="organismAbbrev">\$organismAbbrev</paramValue>) . "\n";
   my $depends = $tt->{depends};
   foreach my $d (@$depends) {
+    next if $isOrgSpecific && $pruneMap->{$d} ne 'MO';
     print "    <depends name=\"$d\"/>\n";
   }
 
@@ -36,4 +44,21 @@ Render a tuning manager graph as reflow XML.  Input is the graph in yaml format,
 
 Usage: tmGraphToReflow yaml_file [organismAbbrev]
 ";
+}
+
+sub readPruneFile {
+  die "Must set env var PRUNE_FILE\n" unless $ENV{PRUNE_FILE};
+
+  open(FH, '<', $ENV{PRUNE_FILE}) || die "Can't open prune file $ENV{PRUNE_FILE}";
+
+  my $pruneMap;
+  #MG  <tuningTable name="OntologyLevels" prefixEnabled="true">                                                                                          
+  while (<FH>) {
+    /^(\S+)\s+\<tuningTable\s+name=\"(\w+)/ || die "Can't parse line: $_\n";
+    $pruneMap->{$2} = $1;
+    print STDERR "$1 $2\n";
+  }
+
+  return $pruneMap;
+  close(FH);
 }
