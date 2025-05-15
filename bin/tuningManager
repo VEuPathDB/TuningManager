@@ -170,9 +170,9 @@ eval {
         $subversionDir, $props->{dblink}, $props->{housekeepingSchema}, $props->{logTable}, $alwaysUpdateAll);
   }
 
-  dumpPsql(\%tuningTables);   # uncomment to dump the graph to yaml (STDOUT)
+#  dumpPsql(\%tuningTables);              # uncomment to dump psql files
 #  dumpDependencyGraph(\%tuningTables);   # uncomment to dump the graph to yaml (STDOUT)
-   exit;
+#  exit;
 
   if ($doUpdate && !$prefix) {
     clearDeadLock();
@@ -843,6 +843,12 @@ sub dumpPsql {
     open(my $fh, '>', "/home/sfischer/denormTables/psql/$pruneCode/$tableName.psql") || die "Can't open $tableName.psql";
     my $sqls = $tuningTables->{$tableName}->{sqls};
 
+    my $ixfh;
+
+    if ($pruneCode eq 'MO') {
+      open($ixfh, '>', "/home/sfischer/denormTables/psql/$pruneCode/${tableName}_ix.psql") || die "Can't open ${tableName}_ix.psql";
+    }
+
     foreach my $sql (@$sqls) {
       $sql =~ s/\&prefix/\:ORG_ABBREV/g;
       $sql =~ s/\&filter/\:TAXON_ID/g;
@@ -851,9 +857,14 @@ sub dumpPsql {
       if ($pruneCode eq 'MO' && $sql =~ /create\s+table\s+(\:ORG_ABBREV)?$tableName\s/i) {
         $sql = ":CREATE_AND_POPULATE\n$sql\n:DECLARE_PARTITION";
       }
+      if ($pruneCode eq 'MO' && $sql =~ /create.+index.+\n?.+on\s+(\:ORG_ABBREV)?$tableName\s/i) {
+        print $ixfh "$sql;\n\n";
+        next;
+      }
       print $fh "$sql;\n\n";
     }
     close($fh);
+    close($ixfh) if $ixfh;
   }
 }
 

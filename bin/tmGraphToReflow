@@ -17,15 +17,20 @@ my $yaml =LoadFile($yamlFile);
 print '<workflowGraph name="">' , "\n";
 
 foreach my $tt (@$yaml) {
-  my $name = $tt->{name};
+  my $tableName = $tt->{name};
   if ($isOrgSpecific) {
-    next unless $pruneMap->{$name} eq 'MO';
+    next unless $pruneMap->{$tableName} eq 'MO';
   } else {
-    next unless $pruneMap->{$name} eq 'MG'
+    next unless $pruneMap->{$tableName} eq 'MG'
   }
-  print qq(  <step name="$name" stepClass="ApiCommonWorkflow::Main::WorkflowSteps::CreateDenormalizedTable">) . "\n";
-  print qq(    <paramValue name="psqlFile">\$psqlFileDir/$name.psql</paramValue>) . "\n";
-  print qq(    <paramValue name="organismAbbrev">\$organismAbbrev</paramValue>) . "\n";
+  print qq(  <step name="createTable_$tableName" stepClass="ApiCommonWorkflow::Main::WorkflowSteps::CreateDenormalizedTable">) . "\n";
+  print qq(    <paramValue name="tableName">$tableName</paramValue>) . "\n";
+  print qq(    <paramValue name="psqlDirPath">\$\$psqlDirPath\$\$</paramValue>) . "\n";
+  print qq(    <paramValue name="mode">child</paramValue>) . "\n";
+  print qq(    <paramValue name="schema">webtable</paramValue>) . "\n";
+  print qq(    <paramValue name="projectName">\$\$projectName\$\$</paramValue>) . "\n";
+  print qq(    <paramValue name="organismAbbrev">\$\$organismAbbrev\$\$</paramValue>) . "\n";
+  print qq(    <paramValue name="gusConfigFile">\$\$gusConfigFile\$\$</paramValue>) . "\n";
   my $depends = $tt->{depends};
   foreach my $d (@$depends) {
     next if $isOrgSpecific && $pruneMap->{$d} ne 'MO';
