@@ -21,11 +21,10 @@ foreach my $tt (@$yaml) {
   if ($isOrgSpecific) {
     next unless $pruneMap->{$tableName} eq 'MO';
   } else {
-    next unless $pruneMap->{$tableName} eq 'MG'
+    next unless $pruneMap->{$tableName} eq 'MG' || $pruneMap->{$tableName} eq 'MC'
   }
   print qq(  <step name="createTable_$tableName" stepClass="ApiCommonWorkflow::Main::WorkflowSteps::CreateDenormalizedTable">) . "\n";
   print qq(    <paramValue name="tableName">$tableName</paramValue>) . "\n";
-  print qq(    <paramValue name="psqlDirPath">\$\$psqlDirPath\$\$</paramValue>) . "\n";
   print qq(    <paramValue name="mode">child</paramValue>) . "\n";
   print qq(    <paramValue name="schema">webtable</paramValue>) . "\n";
   print qq(    <paramValue name="projectName">\$\$projectName\$\$</paramValue>) . "\n";
@@ -34,7 +33,7 @@ foreach my $tt (@$yaml) {
   my $depends = $tt->{depends};
   foreach my $d (@$depends) {
     next if $isOrgSpecific && $pruneMap->{$d} ne 'MO';
-    print "    <depends name=\"$d\"/>\n";
+    print "    <depends name=\"createTable_$d\"/>\n";
   }
 
   print "  </step>\n\n";
@@ -47,7 +46,7 @@ sub usage {
   die "
 Render a tuning manager graph as reflow XML.  Input is the graph in yaml format, as produced by the dumper in the tuning manager.
 
-Usage: tmGraphToReflow yaml_file [organismAbbrev]
+Usage: tmGraphToReflow yaml_file [true]
 ";
 }
 
@@ -57,7 +56,8 @@ sub readPruneFile {
   open(FH, '<', $ENV{PRUNE_FILE}) || die "Can't open prune file $ENV{PRUNE_FILE}";
 
   my $pruneMap;
-  #MG  <tuningTable name="OntologyLevels" prefixEnabled="true">                                                                                          
+
+  #MG  <tuningTable name="OntologyLevels" prefixEnabled="true">
   while (<FH>) {
     /^(\S+)\s+\<tuningTable\s+name=\"(\w+)/ || die "Can't parse line: $_\n";
     $pruneMap->{$2} = $1;
