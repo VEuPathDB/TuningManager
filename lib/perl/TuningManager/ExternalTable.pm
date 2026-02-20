@@ -204,8 +204,13 @@ SQL
     my ($viewText) = $stmt->fetchrow_array();
     $stmt->finish();
 
-    $viewText =~ m/[.\r\n]*\bfrom\b\s*(\w*)\.(\w*)[.\r\n]*/i;
+    $viewText =~ m/\bfrom\b\s+"?(\w+)"?\."?(\w+)"?/i;
     $schema = $1; $table = $2;
+
+    if (!$schema || !$table) {
+      TuningManager::TuningManager::Log::addLog("Cannot determine underlying table for view $self->{schema}.$self->{table}; skipping modification_date trigger check.");
+      return;
+    }
   }
 
   # check for a trigger
