@@ -39,7 +39,6 @@ sub new {
   $self->{internalDependencies} = [];
   $self->{externalDependencies} = [];
   $self->{externalTuningTableDependencies} = [];
-  $self->{debug} = $debug;
   $self->{alwaysUpdate} = $alwaysUpdate;
   $self->{alwaysUpdateAll} = $alwaysUpdateAll;
   $self->{prefixEnabled} = $prefixEnabled;
