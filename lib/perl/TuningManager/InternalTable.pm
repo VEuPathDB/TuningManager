@@ -501,8 +501,15 @@ sub update {
 
   my $unchanged;
 
-  if (!$prefix && !$storedDefinitionChange && !($self->{alwaysUpdateAll})
-    && $self->{dbStatus} eq "up-to-date") {
+  if (
+    !$prefix
+    && !$storedDefinitionChange
+    && !($self->{alwaysUpdateAll})
+    && $self->{dbStatus} eq "up-to-date"
+    # if it doesn't have downstream dependants, don't bother wasting any time with comparison we have the table
+    # fully built already, just replace it.
+    && !($self->{hasDependants})
+  ) {
     my $startCompare = time;
     $unchanged = $self->matchesPredecessor($suffix, $dbh);
     my $compareDuration = time - $startCompare;
@@ -557,6 +564,11 @@ sub update {
 
     return "neededUpdate"
   }
+}
+
+sub setHasDependants{
+  my ($self, $hasDependants) = @_;
+  $self->{$hasDependants} = $hasDependants;
 }
 
 sub getDatabaseTime {
