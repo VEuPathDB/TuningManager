@@ -39,7 +39,6 @@ sub new {
   $self->{internalDependencies} = [];
   $self->{externalDependencies} = [];
   $self->{externalTuningTableDependencies} = [];
-  $self->{debug} = $debug;
   $self->{alwaysUpdate} = $alwaysUpdate;
   $self->{alwaysUpdateAll} = $alwaysUpdateAll;
   $self->{prefixEnabled} = $prefixEnabled;
@@ -501,8 +500,15 @@ sub update {
 
   my $unchanged;
 
-  if (!$prefix && !$storedDefinitionChange && !($self->{alwaysUpdateAll})
-    && $self->{dbStatus} eq "up-to-date") {
+  if (
+    !$prefix
+    && !$storedDefinitionChange
+    && !($self->{alwaysUpdateAll})
+    && $self->{dbStatus} eq "up-to-date"
+    # if it doesn't have downstream dependants, don't bother wasting any time with comparison we have the table
+    # fully built already, just replace it.
+    && !($self->{hasDependants})
+  ) {
     my $startCompare = time;
     $unchanged = $self->matchesPredecessor($suffix, $dbh);
     my $compareDuration = time - $startCompare;
@@ -557,6 +563,11 @@ sub update {
 
     return "neededUpdate"
   }
+}
+
+sub setHasDependants{
+  my ($self, $hasDependants) = @_;
+  $self->{$hasDependants} = $hasDependants;
 }
 
 sub getDatabaseTime {
@@ -1050,8 +1061,15 @@ sub tablesDiffer {
 sub getTableSize {
   my ($self, $dbh, $suffix, $prefix) = @_;
 
+  # when the table is partitioned, pg_total_relation_size will return 0 as the parent table is just a placeholder.
+  # So make sure we return the total from all child partitions if the table is partitioned.
   my $stmt = $dbh->prepare(<<SQL) or addErrorLog("\n" . $dbh->errstr . "\n");
-SELECT pg_total_relation_size(?)
+SELECT SUM(pg_total_relation_size(oid)) AS total_size
+FROM pg_class
+WHERE oid = to_regclass(?)
+  OR oid IN (
+  SELECT inhrelid FROM pg_inherits WHERE inhparent = to_regclass(?)
+)
 SQL
 
   my $total_space;
@@ -1059,14 +1077,14 @@ SQL
 
 
   $table_name = $self->{schema} . "." . $prefix . $self->{name} . $suffix;
-  $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
+  $stmt->execute($table_name, $table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
   ($total_space) = $stmt->fetchrow_array();
   $total_space = 0 unless $total_space;
   $stmt->finish();
 
   foreach my $ancillary (@{$self->{ancillaryTables}}) {
     $table_name = $self->{schema} . "." . $prefix . $ancillary->{name} . $suffix;
-    $stmt->execute($table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
+    $stmt->execute($table_name, $table_name) or addErrorLog("\n" . $dbh->errstr . "\n");
     my ($space) = $stmt->fetchrow_array();
     $stmt->finish();
     $total_space += $space;

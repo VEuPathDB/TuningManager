@@ -247,6 +247,20 @@ eval {
     }
   }
 
+  # check if a table is a leaf node or has dependants downstream
+  foreach my $table (keys(%tuningTables)) {
+    my $hasDependants = 0;
+    foreach my $tuningTable (keys(%tuningTables)) {
+      next if $tuningTable eq $table;
+      foreach my $dependency (@{$tuningTables{$tuningTable}->getInternalDependencies()}) {
+        if ($dependency->getName() eq $table) {
+          $hasDependants = 1;
+        }
+      }
+    }
+    $tuningTables{$table}->setHasDependants($hasDependants);
+  }
+
   # check for cycles in graph of dependencies
   foreach my $table (keys(%tuningTables)) {
     $dependencyCycle = 1
