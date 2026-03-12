@@ -1123,7 +1123,7 @@ sub callNeedsUpdateProgram {
   my $debug;
   $debug = " -debug " if $self->{debug};
 
-  my $commandLine = $self->{needsUpdateProgram}->{commandLine}
+  my $commandLine = $self->{needsUpdateProgram}->[0]->{commandLine}
     . " -instance '" . $self->{instance} . "'"
     . " -propfile '" . $self->{propfile} . "'"
     . " -schema '" . $self->{schema} . "'"
