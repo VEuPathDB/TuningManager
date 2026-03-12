@@ -265,47 +265,6 @@ SQL
     $needUpdate = 1;
   }
 
-  # check needsUpdateProgram if defined
-  if ($self->{needsUpdateProgram}) {
-    my $timestamp = $self->getTimestamp() || '';
-    my $debug;
-    $debug = " -debug " if $self->{debug};
-
-    my $commandLine = $self->{needsUpdateProgram}->{commandLine}
-      . " -propfile '" . $self->{propfile} . "'"
-      . " -timestamp '" . $timestamp . "'"
-      . $debug
-      . " 2>&1 ";
-
-    addLog("running needsUpdateProgram with command line \"$commandLine\" for $self->{name}");
-
-    my $lastLine = '';
-    open(STALE_PROGRAM, $commandLine . "|");
-    while (<STALE_PROGRAM>) {
-      my $line = $_;
-      chomp($line);
-      addLog($line);
-      $lastLine = $line;
-    }
-    close(STALE_PROGRAM);
-    my $exitCode = $? >> 8;
-
-    addLog("finished running needsUpdateProgram, with exit code $exitCode");
-
-    if ($exitCode) {
-      addErrorLog("unable to run needsUpdateProgram:\n$commandLine");
-      $broken = 1;
-    } elsif ($lastLine eq 'out of date') {
-      addLog("    $self->{name} is stale according to needsUpdateProgram -- update needed.");
-      $needUpdate = 1;
-    } elsif ($lastLine eq 'up to date') {
-      addLog("    $self->{name} is fresh according to needsUpdateProgram.");
-    } else {
-      addErrorLog("needsUpdateProgram output must end with 'up to date' or 'out of date'. Got: '$lastLine'\n$commandLine");
-      $broken = 1;
-    }
-  }
-
   if ($self->{alwaysUpdate}) {
     addLog("    " . $self->{name} . " must be updated because has the alwaysUpdate attribute.");
     $needUpdate = 1;
@@ -314,6 +273,13 @@ SQL
   if ($self->{alwaysUpdateAll}) {
     addLog("    " . $self->{name} . " must be updated because the global alwaysUpdate flag is set.");
     $needUpdate = 1;
+  }
+
+  # check needsUpdateProgram if defined
+  if ($self->{needsUpdateProgram} && !$needUpdate) {
+    my ($needsUpdate, $isBroken) = $self->callNeedsUpdateProgram();
+    $needUpdate = 1 if $needsUpdate;
+    $broken = 1 if $isBroken;
   }
 
   $tableStatus = "up-to-date";
@@ -1147,5 +1113,50 @@ SQL
   return $formattedSpace;
 }
 
+sub callNeedsUpdateProgram {
+  my ($self) = @_;
 
+  my $needUpdate = 0;
+  my $broken = 0;
+
+  my $timestamp = $self->getTimestamp() || '';
+  my $debug;
+  $debug = " -debug " if $self->{debug};
+
+  my $commandLine = $self->{needsUpdateProgram}->{commandLine}
+    . " -propfile '" . $self->{propfile} . "'"
+    . " -timestamp '" . $timestamp . "'"
+    . $debug
+    . " 2>&1 ";
+
+  addLog("running needsUpdateProgram with command line \"$commandLine\" for $self->{name}");
+
+  my $lastLine = '';
+  open(PROGRAM, $commandLine . "|");
+  while (<PROGRAM>) {
+    my $line = $_;
+    chomp($line);
+    addLog($line);
+    $lastLine = $line;
+  }
+  close(PROGRAM);
+  my $exitCode = $? >> 8;
+
+  addLog("finished running needsUpdateProgram, with exit code $exitCode");
+
+  if ($exitCode) {
+    addErrorLog("unable to run needsUpdateProgram:\n$commandLine");
+    $broken = 1;
+  } elsif ($lastLine eq 'out of date') {
+    addLog("    $self->{name} is stale according to needsUpdateProgram -- update needed.");
+    $needUpdate = 1;
+  } elsif ($lastLine eq 'up to date') {
+    addLog("    $self->{name} is fresh according to needsUpdateProgram.");
+  } else {
+    addErrorLog("needsUpdateProgram output must end with 'up to date' or 'out of date'. Got: '$lastLine'\n$commandLine");
+    $broken = 1;
+  }
+
+  return ($needUpdate, $broken);
+}
 1;
