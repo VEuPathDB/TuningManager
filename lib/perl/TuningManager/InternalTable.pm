@@ -1124,7 +1124,12 @@ sub callNeedsUpdateProgram {
   $debug = " -debug " if $self->{debug};
 
   my $commandLine = $self->{needsUpdateProgram}->{commandLine}
+    . " -instance '" . $self->{instance} . "'"
     . " -propfile '" . $self->{propfile} . "'"
+    . " -schema '" . $self->{schema} . "'"
+    . " -suffix '" . $suffix . "'"
+    . " -prefix '" . $prefix . "'"
+    . " -filterValue '" . $filterValue . "'"
     . " -timestamp '" . $timestamp . "'"
     . $debug
     . " 2>&1 ";
