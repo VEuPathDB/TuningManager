@@ -1127,9 +1127,6 @@ sub callNeedsUpdateProgram {
     . " -instance '" . $self->{instance} . "'"
     . " -propfile '" . $self->{propfile} . "'"
     . " -schema '" . $self->{schema} . "'"
-    . " -suffix '" . $suffix . "'"
-    . " -prefix '" . $prefix . "'"
-    . " -filterValue '" . $filterValue . "'"
     . " -timestamp '" . $timestamp . "'"
     . $debug
     . " 2>&1 ";
