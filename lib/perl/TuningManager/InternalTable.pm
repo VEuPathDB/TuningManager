@@ -507,7 +507,7 @@ sub update {
     && $self->{dbStatus} eq "up-to-date"
     # if it doesn't have downstream dependants, don't bother wasting any time with comparison we have the table
     # fully built already, just replace it.
-    && !($self->{hasDependants})
+    && $self->{hasDependants}
   ) {
     my $startCompare = time;
     $unchanged = $self->matchesPredecessor($suffix, $dbh);
