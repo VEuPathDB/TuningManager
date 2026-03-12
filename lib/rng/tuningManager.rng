@@ -71,7 +71,7 @@
             </element>
 	  </zeroOrMore>
 	  <optional>
-            <element name="isStaleProgram">
+            <element name="needsUpdateProgram">
               <attribute name="commandLine" />
             </element>
 	  </optional>

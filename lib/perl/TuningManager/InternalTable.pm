@@ -14,7 +14,7 @@ my $maxRebuildMinutes;
 sub new {
   my ($class, $name, $internalDependencyNames, $externalDependencyNames,
     $externalTuningTableDependencyNames, $intermediateTables, $ancillaryTables, $sqls,
-    $perls, $unionizations, $programs, $isStaleProgram, $dbh, $debug,
+    $perls, $unionizations, $programs, $needsUpdateProgram, $dbh, $debug,
     $alwaysUpdate, $prefixEnabled, $maxRebuildMinutesParam, $instance, $propfile, $schema,
     $password, $subversionDir, $dblink, $housekeepingSchema, $logTableName, $alwaysUpdateAll)
     = @_;
@@ -34,7 +34,7 @@ sub new {
   $self->{perls} = $perls;
   $self->{unionizations} = $unionizations;
   $self->{programs} = $programs;
-  $self->{isStaleProgram} = $isStaleProgram;
+  $self->{needsUpdateProgram} = $needsUpdateProgram;
   $self->{debug} = $debug;
   $self->{dblink} = $dblink;
   $self->{internalDependencies} = [];
@@ -56,9 +56,9 @@ sub new {
     $self->{qualifiedName} = $schema . "." . $name;
   }
 
-  # validate that alwaysUpdate and isStaleProgram are mutually exclusive
-  if ($self->{alwaysUpdate} && $self->{isStaleProgram}) {
-    die "Error: tuning table '$name' has both alwaysUpdate attribute and isStaleProgram element. These are mutually exclusive.\n";
+  # validate that alwaysUpdate and needsUpdateProgram are mutually exclusive
+  if ($self->{alwaysUpdate} && $self->{needsUpdateProgram}) {
+    die "Error: tuning table '$name' has both alwaysUpdate attribute and needsUpdateProgram element. These are mutually exclusive.\n";
   }
 
   # get timestamp, status, last_check, and definition from database
@@ -265,19 +265,19 @@ SQL
     $needUpdate = 1;
   }
 
-  # check isStaleProgram if defined
-  if ($self->{isStaleProgram}) {
+  # check needsUpdateProgram if defined
+  if ($self->{needsUpdateProgram}) {
     my $timestamp = $self->getTimestamp() || '';
     my $debug;
     $debug = " -debug " if $self->{debug};
 
-    my $commandLine = $self->{isStaleProgram}->{commandLine}
+    my $commandLine = $self->{needsUpdateProgram}->{commandLine}
       . " -propfile '" . $self->{propfile} . "'"
       . " -timestamp '" . $timestamp . "'"
       . $debug
       . " 2>&1 ";
 
-    addLog("running isStaleProgram with command line \"$commandLine\" for $self->{name}");
+    addLog("running needsUpdateProgram with command line \"$commandLine\" for $self->{name}");
 
     my $lastLine = '';
     open(STALE_PROGRAM, $commandLine . "|");
@@ -290,18 +290,18 @@ SQL
     close(STALE_PROGRAM);
     my $exitCode = $? >> 8;
 
-    addLog("finished running isStaleProgram, with exit code $exitCode");
+    addLog("finished running needsUpdateProgram, with exit code $exitCode");
 
     if ($exitCode) {
-      addErrorLog("unable to run isStaleProgram:\n$commandLine");
+      addErrorLog("unable to run needsUpdateProgram:\n$commandLine");
       $broken = 1;
     } elsif ($lastLine eq 'out of date') {
-      addLog("    $self->{name} is stale according to isStaleProgram -- update needed.");
+      addLog("    $self->{name} is stale according to needsUpdateProgram -- update needed.");
       $needUpdate = 1;
     } elsif ($lastLine eq 'up to date') {
-      addLog("    $self->{name} is fresh according to isStaleProgram.");
+      addLog("    $self->{name} is fresh according to needsUpdateProgram.");
     } else {
-      addErrorLog("isStaleProgram output must end with 'up to date' or 'out of date'. Got: '$lastLine'\n$commandLine");
+      addErrorLog("needsUpdateProgram output must end with 'up to date' or 'out of date'. Got: '$lastLine'\n$commandLine");
       $broken = 1;
     }
   }
