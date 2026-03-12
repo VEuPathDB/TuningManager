@@ -164,7 +164,7 @@ eval {
       new($tuningTable->{name}, $tuningTable->{internalDependency}, $tuningTable->{externalDependency},
         $tuningTable->{externalTuningTableDependency}, $tuningTable->{intermediateTable},
         $tuningTable->{ancillaryTable}, $tuningTable->{sql}, $tuningTable->{perl},
-        $tuningTable->{unionization}, $tuningTable->{program}, $dbh, $debug,
+        $tuningTable->{unionization}, $tuningTable->{program}, $tuningTable->{isStaleProgram}, $dbh, $debug,
         $tuningTable->{alwaysUpdate}, $tuningTable->{prefixEnabled},
         $maxRebuildMinutes, $instance, $propFile, $schema, $password,
         $subversionDir, $props->{dblink}, $props->{housekeepingSchema}, $props->{logTable}, $alwaysUpdateAll);
