@@ -5,6 +5,17 @@
     <program commandLine="buildAnnotationChangeTT"/>
   </tuningTable -->
 
+  <!-- Example using needsUpdateProgram for custom staleness checking -->
+  <!-- tuningTable name="Ssgcid">
+    <comment>
+      Data from the Seattle Structural Genomics Center for Infectious Disease,
+      populated from their web service. Uses needsUpdateProgram to check if the
+      source data has been updated since last build.
+    </comment>
+    <needsUpdateProgram commandLine="checkSsgcidStale"/>
+    <program commandLine="buildSsgcidTT"/>
+  </tuningTable -->
+
   <tuningTable name="HelloWorld" alwaysUpdate="true">
     <!-- internalDependency name="AnnotationChange"/ -->
 

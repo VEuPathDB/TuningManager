@@ -70,11 +70,16 @@
               <text/>
             </element>
 	  </zeroOrMore>
+	  <optional>
+            <element name="needsUpdateProgram">
+              <attribute name="commandLine" />
+            </element>
+	  </optional>
 	  <zeroOrMore>
             <element name="program">
               <attribute name="commandLine" />
             </element>
-	  </zeroOrMore>    
+	  </zeroOrMore>
 	</element>
 	<element name="import">
           <attribute name="file"/>
