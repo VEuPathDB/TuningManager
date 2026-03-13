@@ -64,6 +64,7 @@ sub new {
   # get timestamp, status, last_check, and definition from database
   my $sql = <<SQL;
        select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp,
+              EXTRACT(EPOCH FROM timestamp)::bigint AS unix_timestamp,
               status,
               to_char(last_check, 'yyyy-mm-dd hh24:mi:ss') as last_check,
        definition
@@ -74,9 +75,10 @@ SQL
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
     or addErrorLog("\n" . $dbh->errstr . "\n" . $stmt->{sql});
-  my ($timestamp, $dbStatus, $lastCheck, $dbDef) = $stmt->fetchrow_array();
+  my ($timestamp, $unixTimestamp, $dbStatus, $lastCheck, $dbDef) = $stmt->fetchrow_array();
   $stmt->finish();
   $self->{timestamp} = $timestamp;
+  $self->{unixTimestamp} = $unixTimestamp;
   $self->{lastCheck} = $lastCheck;
   $self->{dbDef} = $dbDef;
   $self->{dbStatus} = $dbStatus;
@@ -1119,7 +1121,6 @@ sub callNeedsUpdateProgram {
   my $needUpdate = 0;
   my $broken = 0;
 
-  my $timestamp = $self->getTimestamp() || '';
   my $debug;
   $debug = " -debug " if $self->{debug};
 
@@ -1127,7 +1128,8 @@ sub callNeedsUpdateProgram {
     . " -instance '" . $self->{instance} . "'"
     . " -propfile '" . $self->{propfile} . "'"
     . " -schema '" . $self->{schema} . "'"
-    . " -timestamp '" . $timestamp . "'"
+    . " -timestamp '" . $self->{timestamp} . "'"
+    . " -unixtimestamp '" . $self->{unixTimestamp} . "'"
     . $debug
     . " 2>&1 ";
 
