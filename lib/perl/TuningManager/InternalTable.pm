@@ -14,7 +14,7 @@ my $maxRebuildMinutes;
 sub new {
   my ($class, $name, $internalDependencyNames, $externalDependencyNames,
     $externalTuningTableDependencyNames, $intermediateTables, $ancillaryTables, $sqls,
-    $perls, $unionizations, $programs, $dbh, $debug,
+    $perls, $unionizations, $programs, $needsUpdateProgram, $dbh, $debug,
     $alwaysUpdate, $prefixEnabled, $maxRebuildMinutesParam, $instance, $propfile, $schema,
     $password, $subversionDir, $dblink, $housekeepingSchema, $logTableName, $alwaysUpdateAll)
     = @_;
@@ -34,6 +34,7 @@ sub new {
   $self->{perls} = $perls;
   $self->{unionizations} = $unionizations;
   $self->{programs} = $programs;
+  $self->{needsUpdateProgram} = $needsUpdateProgram;
   $self->{debug} = $debug;
   $self->{dblink} = $dblink;
   $self->{internalDependencies} = [];
@@ -55,9 +56,15 @@ sub new {
     $self->{qualifiedName} = $schema . "." . $name;
   }
 
+  # validate that alwaysUpdate and needsUpdateProgram are mutually exclusive
+  if ($self->{alwaysUpdate} && $self->{needsUpdateProgram}) {
+    die "Error: tuning table '$name' has both alwaysUpdate attribute and needsUpdateProgram element. These are mutually exclusive.\n";
+  }
+
   # get timestamp, status, last_check, and definition from database
   my $sql = <<SQL;
        select to_char(timestamp, 'yyyy-mm-dd hh24:mi:ss') as timestamp,
+              EXTRACT(EPOCH FROM timestamp)::bigint AS unix_timestamp,
               status,
               to_char(last_check, 'yyyy-mm-dd hh24:mi:ss') as last_check,
        definition
@@ -68,9 +75,10 @@ SQL
   my $stmt = $dbh->prepare($sql);
   $stmt->execute()
     or addErrorLog("\n" . $dbh->errstr . "\n" . $stmt->{sql});
-  my ($timestamp, $dbStatus, $lastCheck, $dbDef) = $stmt->fetchrow_array();
+  my ($timestamp, $unixTimestamp, $dbStatus, $lastCheck, $dbDef) = $stmt->fetchrow_array();
   $stmt->finish();
   $self->{timestamp} = $timestamp;
+  $self->{unixTimestamp} = $unixTimestamp;
   $self->{lastCheck} = $lastCheck;
   $self->{dbDef} = $dbDef;
   $self->{dbStatus} = $dbStatus;
@@ -267,6 +275,13 @@ SQL
   if ($self->{alwaysUpdateAll}) {
     addLog("    " . $self->{name} . " must be updated because the global alwaysUpdate flag is set.");
     $needUpdate = 1;
+  }
+
+  # check needsUpdateProgram if defined
+  if ($self->{needsUpdateProgram} && !$needUpdate) {
+    my ($needsUpdate, $isBroken) = $self->callNeedsUpdateProgram();
+    $needUpdate = 1 if $needsUpdate;
+    $broken = 1 if $isBroken;
   }
 
   $tableStatus = "up-to-date";
@@ -1100,5 +1115,52 @@ SQL
   return $formattedSpace;
 }
 
+sub callNeedsUpdateProgram {
+  my ($self) = @_;
 
+  my $needUpdate = 0;
+  my $broken = 0;
+
+  my $debug;
+  $debug = " -debug " if $self->{debug};
+
+  my $commandLine = $self->{needsUpdateProgram}->[0]->{commandLine}
+    . " -instance '" . $self->{instance} . "'"
+    . " -propfile '" . $self->{propfile} . "'"
+    . " -schema '" . $self->{schema} . "'"
+    . " -timestamp '" . $self->{timestamp} . "'"
+    . " -unixtimestamp '" . $self->{unixTimestamp} . "'"
+    . $debug
+    . " 2>&1 ";
+
+  addLog("running needsUpdateProgram with command line \"$commandLine\" for $self->{name}");
+
+  my $lastLine = '';
+  open(PROGRAM, $commandLine . "|");
+  while (<PROGRAM>) {
+    my $line = $_;
+    chomp($line);
+    addLog($line);
+    $lastLine = $line;
+  }
+  close(PROGRAM);
+  my $exitCode = $? >> 8;
+
+  addLog("finished running needsUpdateProgram, with exit code $exitCode");
+
+  if ($exitCode) {
+    addErrorLog("unable to run needsUpdateProgram:\n$commandLine");
+    $broken = 1;
+  } elsif ($lastLine eq 'out of date') {
+    addLog("    $self->{name} is stale according to needsUpdateProgram -- update needed.");
+    $needUpdate = 1;
+  } elsif ($lastLine eq 'up to date') {
+    addLog("    $self->{name} is fresh according to needsUpdateProgram.");
+  } else {
+    addErrorLog("needsUpdateProgram output must end with 'up to date' or 'out of date'. Got: '$lastLine'\n$commandLine");
+    $broken = 1;
+  }
+
+  return ($needUpdate, $broken);
+}
 1;
