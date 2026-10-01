@@ -841,7 +841,7 @@ SQL
 
   addLog("    running ANALYZE on table " . $table);
   # Run stored procedure to analyze new table
-  $dbh->do("ANALYZE $schema.$prefix$table$suffix")
+  $dbh->do("VACUUM (FREEZE, ANALYZE) $schema.$prefix$table$suffix")
     or addErrorLog("\n" . $dbh->errstr . "\n");
 
   return $viewRtn
